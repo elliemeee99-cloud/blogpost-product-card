@@ -8,7 +8,7 @@ import pandas as pd
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
-st.title("🛍️ 博客商品卡片自动生成器 (精细化定制版)")
+st.title("🛍️ 博客商品卡片自动生成器 (精细控制版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -17,83 +17,107 @@ else:
     st.error("❌ 未读取到 API Key，请检查 Settings -> Secrets")
     st.stop()
 
-# 初始化 Session State
-if "product_list" not in st.session_state:
-    st.session_state.product_list = []
+if "matched_products" not in st.session_state:
+    st.session_state.matched_products = []
 if "step" not in st.session_state:
     st.session_state.step = 1
 
-# ================= 核心功能函数 =================
+# ================= 核心爬虫与 AI 函数 =================
 
 def get_soup(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         return BeautifulSoup(response.text, 'lxml')
     except Exception as e:
-        st.error(f"网页请求失败: {e}")
         return None
 
+def fetch_blog_context(blog_url):
+    """抓取博客正文用于语义分析"""
+    soup = get_soup(blog_url)
+    if not soup: return ""
+    return soup.get_text(separator='\n', strip=True)[:4000]
+
 def fetch_product_list(category_url):
-    """从列表页抓取最多50个商品链接"""
+    """抓取最多 60 个商品候选池供 AI 海选"""
     soup = get_soup(category_url)
     if not soup: return []
     
-    # 提取所有包含文本的有效链接，去除重复，限制50个
     seen_urls = set()
     products = []
-    
     for a in soup.find_all('a', href=True):
         title = a.get_text(strip=True)
         href = a['href']
         full_url = urljoin(category_url, href)
-        
-        # 简单过滤：标题长度适中，且不是常见的非商品链接
         if len(title) > 5 and full_url not in seen_urls and "javascript" not in full_url:
             seen_urls.add(full_url)
-            products.append({"Select": False, "Title": title, "URL": full_url})
-            if len(products) >= 50:
+            products.append({"title": title, "url": full_url})
+            if len(products) >= 60:
                 break
     return products
 
+def ai_match_top_30(blog_text, product_list):
+    """AI 根据博客内容从候选池中选出最匹配的 30 个"""
+    prompt = f"""
+    You are an expert e-commerce recommender.
+    I will provide a Blog Post content and a list of product candidates (title + URL).
+    Based on the context, theme, and audience of the Blog Post, select exactly the top 30 most relevant products (or all of them if there are fewer than 30).
+    
+    Blog Post:
+    {blog_text[:3000]}
+    
+    Product Candidates:
+    {json.dumps(product_list, ensure_ascii=False)}
+    
+    Output ONLY a JSON array of the selected products, keeping their original "title" and "url". No other text.
+    """
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"} if "json" in prompt.lower() else None,
+            max_tokens=2500
+        )
+        result_text = response.choices[0].message.content
+        if result_text.startswith("```json"):
+            result_text = result_text.replace("```json\n", "").replace("```", "")
+        return json.loads(result_text)
+    except Exception as e:
+        st.error(f"匹配出错: {e}")
+        return product_list[:30]
+
 def extract_product_details(product_url):
-    """深入商品详情页，抓取高质量图片和精确文本"""
+    """深入详情页提取：高清图、无翻译原语言详情、精确规格"""
     soup = get_soup(product_url)
     if not soup: return None
     
-    # 1. 强制获取最高质量的主图 (修复图裂问题的终极方案)
     main_image = ""
     og_img = soup.find('meta', property='og:image')
     if og_img and og_img.get('content'):
         main_image = og_img['content']
     else:
-        # 备用方案：找最大的 img 标签
         img_tag = soup.find('img')
         if img_tag:
             main_image = img_tag.get('data-src') or img_tag.get('src', '')
-    
-    main_image = urljoin(product_url, main_image) if main_image else "https://via.placeholder.com/400x300?text=Image+Not+Found"
+    main_image = urljoin(product_url, main_image) if main_image else "[https://via.placeholder.com/400x300](https://via.placeholder.com/400x300)"
 
-    # 2. 提取页面纯文本供 LLM 分析
-    text_content = soup.get_text(separator='\n', strip=True)[:6000]
+    text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 3. 严格的提示词 (禁止中文，指定第一段和规格)
     prompt = f"""
     Analyze the following product page text. 
-    CRITICAL RULE: DO NOT translate. You MUST keep the EXACT original language of the webpage (e.g., French, English). No Chinese.
+    CRITICAL RULE: DO NOT TRANSLATE. You MUST extract content in the EXACT ORIGINAL LANGUAGE of the webpage. No Chinese unless the page is in Chinese.
     
-    Extract the following fields into JSON:
-    1. "title": The precise name of the product.
-    2. "price": The exact price (e.g., "28,00 €").
-    3. "details": Extract ONLY the EXACT FIRST PARAGRAPH of the product description (Description du produit). Do not summarize.
-    4. "specs": Extract the specifications (Spécifications, Matière, Mesure, etc.) EXACTLY as they appear. If it's a list, format it clearly.
-    5. "cta_text": Generate a short Call to Action button text in the original language of the page (e.g., "Acheter maintenant" for French, "Buy Now" for English).
+    Extract into JSON:
+    1. "title": The product name.
+    2. "price": The price (e.g., "28,00 €").
+    3. "details": Extract ONLY the EXACT FIRST PARAGRAPH of the product description. Do not summarize or alter the text.
+    4. "specs": Extract the specifications list exactly as they appear.
+    5. "cta_text": Generate a "Buy Now" button text in the page's original language (e.g., "Acheter maintenant").
 
     Page Text:
     {text_content}
     """
-    
     try:
         response = client.chat.completions.create(
             model="deepseek-chat",
@@ -102,14 +126,13 @@ def extract_product_details(product_url):
             max_tokens=1500
         )
         result = json.loads(response.choices[0].message.content)
-        result["image_url"] = main_image # 覆盖为我们抓取到的高清图
+        result["image_url"] = main_image
         result["buy_link"] = product_url
         return result
-    except Exception as e:
+    except:
         return None
 
-# ================= 动态去除硬编码的 HTML 模板 =================
-# 移除了所有中文标签，纯靠 Icon 和 LLM 提取的内容
+# ================= HTML 模板 =================
 html_template = """
 <div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 15px; overflow: hidden; background-color: #FAFAFA; box-shadow: 0 4px 15px rgba(255, 111, 89, 0.1); margin-bottom: 20px; font-family: sans-serif; max-width: 800px;">
     <div style="flex: 1; min-width: 250px;">
@@ -129,59 +152,73 @@ html_template = """
 </div>
 """
 
-# ================= 界面交互工作流 =================
+# ================= 界面工作流 =================
 
-# --- 步骤 1：输入链接并获取列表 ---
-st.markdown("### 步骤 1：抓取商品候选池")
-target_url = st.text_input("输入商品列表页/分类页链接", placeholder="例如：https://yourshop.com/category/halloween")
+st.markdown("### 步骤 1：输入数据源")
+col1, col2 = st.columns(2)
+with col1:
+    blog_url = st.text_input("博客文章链接 (Blog Post URL)", placeholder="用于语义匹配分析")
+with col2:
+    shop_url = st.text_input("商品列表页/着陆页链接 (Landing Page)", placeholder="用于抓取候选商品")
 
-if st.button("🔍 抓取此页面的商品 (最多50个)"):
-    if not target_url:
-        st.warning("请填写链接")
+if st.button("🔍 智能抓取并海选 30 个商品"):
+    if not blog_url or not shop_url:
+        st.warning("请填写完整的两个链接！")
     else:
-        with st.spinner("正在解析网页链接..."):
-            st.session_state.product_list = fetch_product_list(target_url)
-            st.session_state.step = 2
+        with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
+            blog_text = fetch_blog_context(blog_url)
+            pool = fetch_product_list(shop_url)
+            
+        if not pool:
+            st.error("未能从商品列表页抓取到商品，请检查链接。")
+        else:
+            with st.spinner(f"2/2 已抓取 {len(pool)} 个候选链接，正在请求 AI 根据博客内容海选出最匹配的 30 个..."):
+                top_30 = ai_match_top_30(blog_text, pool)
+                
+                # 默认全部不勾选，由人工决定
+                for item in top_30:
+                    item["Select"] = False 
+                
+                st.session_state.matched_products = top_30
+                st.session_state.step = 2
 
-# --- 步骤 2：显示列表并勾选 ---
-if st.session_state.step >= 2 and st.session_state.product_list:
-    st.markdown("### 步骤 2：勾选需要生成卡片的商品")
-    st.info("我们在页面上找到了以下链接（已自动过滤无关链接）。请勾选您确认是商品的条目：")
+if st.session_state.step >= 2 and st.session_state.matched_products:
+    st.markdown("### 步骤 2：人工确认生成名单")
+    st.info("以下是 AI 结合博客内容海选出的 30 个商品。请勾选您需要生成独立卡片的商品：")
     
-    # 使用 st.data_editor 提供批量勾选表格
-    df = pd.DataFrame(st.session_state.product_list)
+    df = pd.DataFrame(st.session_state.matched_products)
+    if "Select" in df.columns:
+        df = df[["Select", "title", "url"]]
+        
     edited_df = st.data_editor(
         df,
         column_config={
-            "Select": st.column_config.CheckboxColumn("选择", help="勾选以生成卡片", default=False),
-            "Title": st.column_config.TextColumn("抓取到的标题/文本", width="medium"),
-            "URL": st.column_config.LinkColumn("商品链接", width="large")
+            "Select": st.column_config.CheckboxColumn("生成卡片", default=False),
+            "title": st.column_config.TextColumn("商品标题", width="medium"),
+            "url": st.column_config.LinkColumn("商品链接", width="large")
         },
-        disabled=["Title", "URL"],
+        disabled=["title", "url"],
         hide_index=True,
         use_container_width=True
     )
     
-    # --- 步骤 3：一键生成选中卡片 ---
-    if st.button("✨ 为选中的商品生成卡片", type="primary"):
+    if st.button("✨ 生成独立商品卡片", type="primary"):
         selected_rows = edited_df[edited_df["Select"] == True]
         
         if selected_rows.empty:
             st.warning("请至少勾选一个商品！")
         else:
-            final_html_codes = ""
-            st.markdown("### 步骤 3：生成结果")
-            tabs = st.tabs(["👁️ 视觉预览", "💻 纯 HTML 代码"])
+            st.markdown("### 步骤 3：最终结果")
+            tabs = st.tabs(["👁️ 视觉预览", "💻 独立 HTML 代码"])
             
-            # 使用进度条
-            progress_text = "正在深入每个商品页面提取描述和规格..."
+            progress_text = "正在逐个深入详情页提取数据..."
             my_bar = st.progress(0, text=progress_text)
             
             total = len(selected_rows)
             for i, (_, row) in enumerate(selected_rows.iterrows()):
-                prod_url = row["URL"]
+                prod_url = row["url"]
+                prod_title_preview = row["title"]
                 
-                # 请求 LLM 提取详细信息
                 details_data = extract_product_details(prod_url)
                 
                 if details_data:
@@ -190,18 +227,20 @@ if st.session_state.step >= 2 and st.session_state.product_list:
                         title=details_data.get("title", ""),
                         price=details_data.get("price", ""),
                         details=details_data.get("details", ""),
-                        specs=details_data.get("specs", "").replace('\n', '<br>'), # 处理规格换行
+                        specs=details_data.get("specs", "").replace('\n', '<br>'),
                         buy_link=details_data.get("buy_link", ""),
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
-                    final_html_codes += card_html + "\n\n"
                     
+                    # 视觉预览 Tab
                     with tabs[0]:
                         st.components.v1.html(card_html, height=280)
+                    
+                    # 代码 Tab：每个商品分离输出独立的带标题的代码块
+                    with tabs[1]:
+                        st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
+                        st.code(card_html, language='html')
                 
-                my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个商品...")
+                my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
             
-            with tabs[1]:
-                st.code(final_html_codes, language='html')
-            
-            st.success("✅ 所有选中商品处理完毕！")
+            st.success(f"✅ 成功生成 {total} 个独立商品卡片！请在“独立 HTML 代码”标签页中分别复制使用。")
