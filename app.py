@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
-st.title("🛍️ 博客商品卡片自动生成器 (精细控制版)")
+st.title("🛍️ 博客商品卡片自动生成器 (网格极简版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -38,7 +38,7 @@ def fetch_blog_context(blog_url):
     return soup.get_text(separator='\n', strip=True)[:4000]
 
 def fetch_product_list(category_url):
-    """抓取候选商品，自动清除参数，并严格过滤掉没有图片的非商品页"""
+    """抓取候选商品，自动清除参数，过滤掉没有图片的非商品页"""
     soup = get_soup(category_url)
     if not soup: return []
     
@@ -52,7 +52,6 @@ def fetch_product_list(category_url):
         clean_url = full_url.split('?')[0]
         
         if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
-            # 严格查找图片，过滤掉 About Us / Contact 等纯文本链接
             img = a.find('img')
             if not img and a.parent:
                 img = a.parent.find('img')
@@ -63,7 +62,6 @@ def fetch_product_list(category_url):
                 src = img.get('data-src') or img.get('src')
                 if src:
                     img_url = urljoin(category_url, src).split('?')[0]
-                    # 只有真正找到了图片的链接才会被加入候选池
                     seen_urls.add(clean_url)
                     products.append({"title": title, "url": clean_url, "thumbnail": img_url})
                     if len(products) >= 60:
@@ -115,6 +113,7 @@ def extract_product_details(product_url):
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
+    # 移除了 Details 提取，让模型只关注标题、价格和规格
     prompt = f"""
     Analyze the following product page text. 
     CRITICAL RULE: DO NOT TRANSLATE. You MUST extract content in the EXACT ORIGINAL LANGUAGE of the webpage. No Chinese unless the page is in Chinese.
@@ -122,9 +121,8 @@ def extract_product_details(product_url):
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
-    3. "details": Extract ONLY the EXACT FIRST PARAGRAPH of the product description. Do not summarize or alter the text.
-    4. "specs": Extract the specifications list exactly as they appear.
-    5. "cta_text": Generate a "Buy Now" button text in the page's original language (e.g., "Acheter maintenant").
+    3. "specs": Extract the specifications list exactly as they appear. If there are none, output a brief default like "Standard".
+    4. "cta_text": Generate a "Buy Now" button text in the page's original language (e.g., "Acheter maintenant").
 
     Page Text:
     {text_content}
@@ -144,22 +142,23 @@ def extract_product_details(product_url):
         return None
 
 # ================= 优化后的 HTML 模板 =================
-# 调整了图片比例、字体大小，以及内部间距
+# 去除 Details，图片改为 object-fit: contain 防裁切变形
 html_template = """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 15px; overflow: hidden; background-color: #FAFAFA; box-shadow: 0 4px 15px rgba(255, 111, 89, 0.1); margin-bottom: 20px; font-family: sans-serif; max-width: 800px; border: 1px solid #eaeaea;">
-    <div style="flex: 0.8; min-width: 200px; max-width: 40%;">
-        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: cover; object-position: center;" alt="{title}">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; margin-bottom: 20px; font-family: sans-serif; max-width: 800px; min-height: 220px;">
+    <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px;">
+        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
-    <div style="flex: 1.2; padding: 15px 20px; display: flex; flex-direction: column; justify-content: space-between;">
-        <h3 style="margin-top: 0; color: #4A403A; font-size: 15px; margin-bottom: 10px; line-height: 1.3;">{title}</h3>
-        <div style="margin-bottom: 10px;">
-            <span style="background-color: #FF6F59; color: #FFFFFF; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px;">🏷️ {price}</span>
+    <div style="width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 15px; line-height: 1.4;">{title}</h3>
+            <div style="margin-bottom: 15px;">
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px;">🏷️ {price}</span>
+            </div>
+            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 150px; overflow-y: auto;">
+                <strong>⚙️ </strong>{specs}
+            </div>
         </div>
-        <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 12px; color: #4A403A; line-height: 1.5;">
-            <strong>💡 </strong>{details}<br><br>
-            <strong>⚙️ </strong>{specs}
-        </div>
-        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
     </div>
 </div>
 """
@@ -177,7 +176,7 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
     if not blog_url or not shop_url:
         st.warning("请填写完整的两个链接！")
     else:
-        with st.spinner("1/2 正在抓取博客和着陆页候选商品 (已过滤无关信息页)..."):
+        with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
             blog_text = fetch_blog_context(blog_url)
             pool = fetch_product_list(shop_url)
             
@@ -211,34 +210,29 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
-    st.info("以下是 AI 海选出的商品。请勾选您需要生成独立卡片的商品：")
+    st.info("以下是 AI 海选出的商品。勾选下方图片确认生成：")
     
-    # === 使用表单和 columns 自定义超大缩略图列表，取代原本的 data_editor ===
+    # === 使用 5 列网格布局展示预览图 ===
     with st.form("selection_form"):
         selected_urls = []
-        # 添加表头
-        h_col1, h_col2, h_col3 = st.columns([1, 2, 6])
-        h_col1.markdown("**生成**")
-        h_col2.markdown("**预览图**")
-        h_col3.markdown("**商品标题与链接**")
-        st.divider()
         
-        for i, item in enumerate(st.session_state.matched_products):
-            col1, col2, col3 = st.columns([1, 2, 6])
-            with col1:
-                # 复选框居中占位
-                st.write("")
-                if st.checkbox("选择", key=f"chk_{i}", label_visibility="collapsed"):
-                    selected_urls.append(item["url"])
-            with col2:
-                # 渲染超大缩略图
-                st.image(item["thumbnail"], width=120)
-            with col3:
-                # 展示标题和干净的链接
-                st.markdown(f"**{item['title']}**\n\n🔗 [{item['url']}]({item['url']})")
-            st.divider()
+        # 将商品列表按 5 个一组切分
+        cols_per_row = 5
+        for i in range(0, len(st.session_state.matched_products), cols_per_row):
+            row_items = st.session_state.matched_products[i:i+cols_per_row]
+            cols = st.columns(cols_per_row)
             
-        submit_btn = st.form_submit_button("✨ 生成独立商品卡片", type="primary")
+            for col, item in zip(cols, row_items):
+                with col:
+                    # 显示带提示的图片（鼠标悬停会显示标题）
+                    st.image(item["thumbnail"], use_container_width=True)
+                    # 勾选框放图片正下方
+                    if st.checkbox("生成此卡片", key=f"chk_{item['url']}", help=item['title']):
+                        selected_urls.append(item["url"])
+            
+            st.write("") # 增加一点行间距
+            
+        submit_btn = st.form_submit_button("✨ 生成选中的商品卡片", type="primary")
     
     if submit_btn:
         if not selected_urls:
@@ -247,7 +241,6 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             st.markdown("### 步骤 3：最终结果")
             tabs = st.tabs(["👁️ 视觉预览", "💻 独立 HTML 代码"])
             
-            # 过滤出被选中的商品数据
             selected_items = [p for p in st.session_state.matched_products if p["url"] in selected_urls]
             
             progress_text = "正在逐个深入详情页提取数据..."
@@ -265,22 +258,20 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         image_url=details_data.get("image_url", ""),
                         title=details_data.get("title", ""),
                         price=details_data.get("price", ""),
-                        details=details_data.get("details", ""),
                         specs=details_data.get("specs", "").replace('\n', '<br>'),
                         buy_link=details_data.get("buy_link", ""),
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
                     with tabs[0]:
-                        # 将 iframe 的渲染高度从 280 提升到 400，彻底解决底部截断的问题
-                        st.components.v1.html(card_html, height=400)
+                        st.components.v1.html(card_html, height=350)
                     
                     with tabs[1]:
                         st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                         st.code(card_html, language='html')
                 else:
-                    st.error(f"❌ '{prod_title_preview}' 数据抓取失败，请检查该商品页是否可正常访问。")
+                    st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
                 
                 my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
             
-            st.success(f"✅ 成功生成独立商品卡片！请在“独立 HTML 代码”标签页中分别复制使用。")
+            st.success(f"✅ 成功生成独立商品卡片！")
