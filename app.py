@@ -38,7 +38,6 @@ def fetch_blog_context(blog_url):
     return soup.get_text(separator='\n', strip=True)[:4000]
 
 def fetch_product_list(category_url):
-    """抓取候选商品，自动清除参数，过滤掉没有图片的非商品页"""
     soup = get_soup(category_url)
     if not soup: return []
     
@@ -113,7 +112,6 @@ def extract_product_details(product_url):
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 移除了 Details 提取，让模型只关注标题、价格和规格
     prompt = f"""
     Analyze the following product page text. 
     CRITICAL RULE: DO NOT TRANSLATE. You MUST extract content in the EXACT ORIGINAL LANGUAGE of the webpage. No Chinese unless the page is in Chinese.
@@ -141,10 +139,9 @@ def extract_product_details(product_url):
     except:
         return None
 
-# ================= 优化后的 HTML 模板 =================
-# 去除 Details，图片改为 object-fit: contain 防裁切变形
+# ================= HTML 模板 =================
 html_template = """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; margin-bottom: 20px; font-family: sans-serif; max-width: 800px; min-height: 220px;">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; margin-bottom: 5px; font-family: sans-serif; max-width: 800px; min-height: 220px;">
     <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
@@ -212,25 +209,23 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
     st.info("以下是 AI 海选出的商品。勾选下方图片确认生成：")
     
-    # === 使用 5 列网格布局展示预览图 ===
     with st.form("selection_form"):
         selected_urls = []
         
-        # 将商品列表按 5 个一组切分
-        cols_per_row = 5
+        # 将商品列表按 10 个一组切分，形成 10 列网格
+        cols_per_row = 10
         for i in range(0, len(st.session_state.matched_products), cols_per_row):
             row_items = st.session_state.matched_products[i:i+cols_per_row]
             cols = st.columns(cols_per_row)
             
             for col, item in zip(cols, row_items):
                 with col:
-                    # 显示带提示的图片（鼠标悬停会显示标题）
                     st.image(item["thumbnail"], use_container_width=True)
-                    # 勾选框放图片正下方
-                    if st.checkbox("生成此卡片", key=f"chk_{item['url']}", help=item['title']):
+                    # 文字精简为"选择"，防止在 10 列的狭窄空间里折行变丑
+                    if st.checkbox("选择", key=f"chk_{item['url']}", help=item['title']):
                         selected_urls.append(item["url"])
             
-            st.write("") # 增加一点行间距
+            st.write("") 
             
         submit_btn = st.form_submit_button("✨ 生成选中的商品卡片", type="primary")
     
@@ -239,7 +234,6 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             st.warning("请至少勾选一个商品！")
         else:
             st.markdown("### 步骤 3：最终结果")
-            tabs = st.tabs(["👁️ 视觉预览", "💻 独立 HTML 代码"])
             
             selected_items = [p for p in st.session_state.matched_products if p["url"] in selected_urls]
             
@@ -263,12 +257,14 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
-                    with tabs[0]:
-                        st.components.v1.html(card_html, height=350)
+                    # 1. 直接展示视觉卡片
+                    st.components.v1.html(card_html, height=280)
                     
-                    with tabs[1]:
-                        st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
+                    # 2. 在卡片正下方附加一个折叠面板，点击即可复制这段代码
+                    with st.expander(f"💻 点击查看/复制 HTML 代码 (对应上方商品)"):
                         st.code(card_html, language='html')
+                        
+                    st.write("---") # 加一条分割线隔开下一个商品
                 else:
                     st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
                 
