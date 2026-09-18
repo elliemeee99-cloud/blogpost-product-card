@@ -173,14 +173,31 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
             st.error("未能从商品列表页抓取到商品，请检查链接。")
         else:
             with st.spinner(f"2/2 已抓取 {len(pool)} 个候选链接，正在请求 AI 根据博客内容海选出最匹配的 30 个..."):
-                top_30 = ai_match_top_30(blog_text, pool)
+                raw_top_30 = ai_match_top_30(blog_text, pool)
                 
-                # 默认全部不勾选，由人工决定
-                for item in top_30:
-                    item["Select"] = False 
+                # ===== 新增防御性清洗逻辑：防止 LLM 格式乱码导致崩溃 =====
+                # 1. 如果 LLM 返回了字典 {"products": [...] }，从中剥离出真正的列表
+                if isinstance(raw_top_30, dict):
+                    extracted = []
+                    for val in raw_top_30.values():
+                        if isinstance(val, list):
+                            extracted = val
+                            break
+                    raw_top_30 = extracted if extracted else [raw_top_30]
                 
-                st.session_state.matched_products = top_30
-                st.session_state.step = 2
+                # 2. 确保最终是一个列表，再安全地注入 "Select" 状态
+                valid_top_30 = []
+                if isinstance(raw_top_30, list):
+                    for item in raw_top_30:
+                        if isinstance(item, dict) and "url" in item:
+                            item["Select"] = False 
+                            valid_top_30.append(item)
+                
+                if not valid_top_30:
+                    st.error("大模型返回的数据格式异常，请稍后重试。")
+                else:
+                    st.session_state.matched_products = valid_top_30
+                    st.session_state.step = 2
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
