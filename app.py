@@ -34,13 +34,12 @@ def get_soup(url):
         return None
 
 def fetch_blog_context(blog_url):
-    """抓取博客正文用于语义分析"""
     soup = get_soup(blog_url)
     if not soup: return ""
     return soup.get_text(separator='\n', strip=True)[:4000]
 
 def fetch_product_list(category_url):
-    """抓取最多 60 个商品候选池供 AI 海选"""
+    """抓取最多 60 个商品候选池供 AI 海选（新增：抓取缩略图）"""
     soup = get_soup(category_url)
     if not soup: return []
     
@@ -50,18 +49,32 @@ def fetch_product_list(category_url):
         title = a.get_text(strip=True)
         href = a['href']
         full_url = urljoin(category_url, href)
+        
         if len(title) > 5 and full_url not in seen_urls and "javascript" not in full_url:
+            # 尝试查找对应的缩略图
+            img_url = "https://via.placeholder.com/150?text=No+Image"
+            img = a.find('img')
+            if not img and a.parent:
+                img = a.parent.find('img')
+            if not img and a.parent and a.parent.parent:
+                img = a.parent.parent.find('img')
+                
+            if img:
+                src = img.get('data-src') or img.get('src')
+                if src:
+                    img_url = urljoin(category_url, src)
+                    
             seen_urls.add(full_url)
-            products.append({"title": title, "url": full_url})
+            products.append({"title": title, "url": full_url, "thumbnail": img_url})
             if len(products) >= 60:
                 break
     return products
 
 def ai_match_top_30(blog_text, product_list):
-    """AI 根据博客内容从候选池中选出最匹配的 30 个"""
+    """AI 根据博客内容选出最匹配的 30 个，并保留 thumbnail 字段"""
     prompt = f"""
     You are an expert e-commerce recommender.
-    I will provide a Blog Post content and a list of product candidates (title + URL).
+    I will provide a Blog Post content and a list of product candidates (title + URL + thumbnail).
     Based on the context, theme, and audience of the Blog Post, select exactly the top 30 most relevant products (or all of them if there are fewer than 30).
     
     Blog Post:
@@ -70,7 +83,7 @@ def ai_match_top_30(blog_text, product_list):
     Product Candidates:
     {json.dumps(product_list, ensure_ascii=False)}
     
-    Output ONLY a JSON array of the selected products, keeping their original "title" and "url". No other text.
+    Output ONLY a JSON array of the selected products, keeping their original "title", "url", and "thumbnail". No other text.
     """
     try:
         response = client.chat.completions.create(
@@ -88,7 +101,6 @@ def ai_match_top_30(blog_text, product_list):
         return product_list[:30]
 
 def extract_product_details(product_url):
-    """深入详情页提取：高清图、无翻译原语言详情、精确规格"""
     soup = get_soup(product_url)
     if not soup: return None
     
@@ -175,8 +187,7 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
             with st.spinner(f"2/2 已抓取 {len(pool)} 个候选链接，正在请求 AI 根据博客内容海选出最匹配的 30 个..."):
                 raw_top_30 = ai_match_top_30(blog_text, pool)
                 
-                # ===== 新增防御性清洗逻辑：防止 LLM 格式乱码导致崩溃 =====
-                # 1. 如果 LLM 返回了字典 {"products": [...] }，从中剥离出真正的列表
+                # 数据校验与清洗
                 if isinstance(raw_top_30, dict):
                     extracted = []
                     for val in raw_top_30.values():
@@ -185,12 +196,14 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
                             break
                     raw_top_30 = extracted if extracted else [raw_top_30]
                 
-                # 2. 确保最终是一个列表，再安全地注入 "Select" 状态
                 valid_top_30 = []
                 if isinstance(raw_top_30, list):
                     for item in raw_top_30:
                         if isinstance(item, dict) and "url" in item:
-                            item["Select"] = False 
+                            item["Select"] = False
+                            # 容错：如果 AI 漏了 thumbnail，给个默认图
+                            if "thumbnail" not in item:
+                                item["thumbnail"] = "[https://via.placeholder.com/150?text=No+Image](https://via.placeholder.com/150?text=No+Image)"
                             valid_top_30.append(item)
                 
                 if not valid_top_30:
@@ -205,16 +218,18 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
     
     df = pd.DataFrame(st.session_state.matched_products)
     if "Select" in df.columns:
-        df = df[["Select", "title", "url"]]
+        # 重排序，将缩略图插在第二列
+        df = df[["Select", "thumbnail", "title", "url"]]
         
     edited_df = st.data_editor(
         df,
         column_config={
-            "Select": st.column_config.CheckboxColumn("生成卡片", default=False),
+            "Select": st.column_config.CheckboxColumn("生成", default=False, width="small"),
+            "thumbnail": st.column_config.ImageColumn("预览图", width="medium"),
             "title": st.column_config.TextColumn("商品标题", width="medium"),
             "url": st.column_config.LinkColumn("商品链接", width="large")
         },
-        disabled=["title", "url"],
+        disabled=["thumbnail", "title", "url"],
         hide_index=True,
         use_container_width=True
     )
@@ -249,11 +264,9 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
-                    # 视觉预览 Tab
                     with tabs[0]:
                         st.components.v1.html(card_html, height=280)
                     
-                    # 代码 Tab：每个商品分离输出独立的带标题的代码块
                     with tabs[1]:
                         st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                         st.code(card_html, language='html')
