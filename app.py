@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 import json
 from urllib.parse import urljoin
-import pandas as pd
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
@@ -39,7 +38,7 @@ def fetch_blog_context(blog_url):
     return soup.get_text(separator='\n', strip=True)[:4000]
 
 def fetch_product_list(category_url):
-    """抓取候选商品，并自动清除 URL 参数"""
+    """抓取候选商品，自动清除参数，并严格过滤掉没有图片的非商品页"""
     soup = get_soup(category_url)
     if not soup: return []
     
@@ -49,13 +48,11 @@ def fetch_product_list(category_url):
         title = a.get_text(strip=True)
         href = a['href']
         
-        # 获取完整链接，并使用 split('?')[0] 删除问号及后面的所有参数
         full_url = urljoin(category_url, href)
         clean_url = full_url.split('?')[0]
         
         if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
-            # 尝试查找对应的缩略图
-            img_url = "https://via.placeholder.com/300?text=No+Image"
+            # 严格查找图片，过滤掉 About Us / Contact 等纯文本链接
             img = a.find('img')
             if not img and a.parent:
                 img = a.parent.find('img')
@@ -65,13 +62,12 @@ def fetch_product_list(category_url):
             if img:
                 src = img.get('data-src') or img.get('src')
                 if src:
-                    # 图片链接也清理一下参数，防止加载失败
                     img_url = urljoin(category_url, src).split('?')[0]
-                    
-            seen_urls.add(clean_url)
-            products.append({"title": title, "url": clean_url, "thumbnail": img_url})
-            if len(products) >= 60:
-                break
+                    # 只有真正找到了图片的链接才会被加入候选池
+                    seen_urls.add(clean_url)
+                    products.append({"title": title, "url": clean_url, "thumbnail": img_url})
+                    if len(products) >= 60:
+                        break
     return products
 
 def ai_match_top_30(blog_text, product_list):
@@ -93,14 +89,14 @@ def ai_match_top_30(blog_text, product_list):
             model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"} if "json" in prompt.lower() else None,
-            max_tokens=4000  # 增大 Token 限制，防止 30 个商品导致截断报错
+            max_tokens=4000
         )
         result_text = response.choices[0].message.content
         if result_text.startswith("```json"):
             result_text = result_text.replace("```json\n", "").replace("```", "")
         return json.loads(result_text)
     except Exception as e:
-        st.error(f"匹配出错 (可能是数据返回不完整): {e}")
+        st.error(f"匹配出错: {e}")
         return product_list[:30]
 
 def extract_product_details(product_url):
@@ -142,27 +138,28 @@ def extract_product_details(product_url):
         )
         result = json.loads(response.choices[0].message.content)
         result["image_url"] = main_image
-        result["buy_link"] = product_url # 这里已经是清洗过的干净链接了
+        result["buy_link"] = product_url
         return result
     except:
         return None
 
-# ================= HTML 模板 =================
+# ================= 优化后的 HTML 模板 =================
+# 调整了图片比例、字体大小，以及内部间距
 html_template = """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 15px; overflow: hidden; background-color: #FAFAFA; box-shadow: 0 4px 15px rgba(255, 111, 89, 0.1); margin-bottom: 20px; font-family: sans-serif; max-width: 800px;">
-    <div style="flex: 1; min-width: 250px;">
-        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: cover;" alt="{title}">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 15px; overflow: hidden; background-color: #FAFAFA; box-shadow: 0 4px 15px rgba(255, 111, 89, 0.1); margin-bottom: 20px; font-family: sans-serif; max-width: 800px; border: 1px solid #eaeaea;">
+    <div style="flex: 0.8; min-width: 200px; max-width: 40%;">
+        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: cover; object-position: center;" alt="{title}">
     </div>
-    <div style="flex: 1.5; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
-        <h3 style="margin-top: 0; color: #4A403A; font-size: 18px; margin-bottom: 15px;">{title}</h3>
-        <div style="margin-bottom: 15px;">
-            <span style="background-color: #FF6F59; color: #FFFFFF; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 15px;">🏷️ {price}</span>
+    <div style="flex: 1.2; padding: 15px 20px; display: flex; flex-direction: column; justify-content: space-between;">
+        <h3 style="margin-top: 0; color: #4A403A; font-size: 15px; margin-bottom: 10px; line-height: 1.3;">{title}</h3>
+        <div style="margin-bottom: 10px;">
+            <span style="background-color: #FF6F59; color: #FFFFFF; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px;">🏷️ {price}</span>
         </div>
-        <div style="background-color: #FFF5E4; border-radius: 8px; padding: 15px; margin-bottom: 20px; font-size: 13px; color: #4A403A; line-height: 1.6;">
+        <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 12px; color: #4A403A; line-height: 1.5;">
             <strong>💡 </strong>{details}<br><br>
             <strong>⚙️ </strong>{specs}
         </div>
-        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
     </div>
 </div>
 """
@@ -180,17 +177,16 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
     if not blog_url or not shop_url:
         st.warning("请填写完整的两个链接！")
     else:
-        with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
+        with st.spinner("1/2 正在抓取博客和着陆页候选商品 (已过滤无关信息页)..."):
             blog_text = fetch_blog_context(blog_url)
             pool = fetch_product_list(shop_url)
             
         if not pool:
-            st.error("未能从商品列表页抓取到商品，请检查链接。")
+            st.error("未能从商品列表页抓取到有效商品图片，请检查链接。")
         else:
-            with st.spinner(f"2/2 已抓取 {len(pool)} 个干净链接，正在请求 AI 根据博客内容海选..."):
+            with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在请求 AI 进行语义海选..."):
                 raw_top_30 = ai_match_top_30(blog_text, pool)
                 
-                # 数据校验与清洗
                 if isinstance(raw_top_30, dict):
                     extracted = []
                     for val in raw_top_30.values():
@@ -203,7 +199,6 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
                 if isinstance(raw_top_30, list):
                     for item in raw_top_30:
                         if isinstance(item, dict) and "url" in item:
-                            item["Select"] = False
                             if "thumbnail" not in item:
                                 item["thumbnail"] = "[https://via.placeholder.com/300?text=No+Image](https://via.placeholder.com/300?text=No+Image)"
                             valid_top_30.append(item)
@@ -216,42 +211,52 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
-    st.info("以下是 AI 结合博客内容海选出的商品（链接已自动净化）。请勾选您需要生成独立卡片的商品：")
+    st.info("以下是 AI 海选出的商品。请勾选您需要生成独立卡片的商品：")
     
-    df = pd.DataFrame(st.session_state.matched_products)
-    if "Select" in df.columns:
-        df = df[["Select", "thumbnail", "title", "url"]]
+    # === 使用表单和 columns 自定义超大缩略图列表，取代原本的 data_editor ===
+    with st.form("selection_form"):
+        selected_urls = []
+        # 添加表头
+        h_col1, h_col2, h_col3 = st.columns([1, 2, 6])
+        h_col1.markdown("**生成**")
+        h_col2.markdown("**预览图**")
+        h_col3.markdown("**商品标题与链接**")
+        st.divider()
         
-    # 按照截图优化列宽适配
-    edited_df = st.data_editor(
-        df,
-        column_config={
-            "Select": st.column_config.CheckboxColumn("生成", default=False, width="small"),
-            "thumbnail": st.column_config.ImageColumn("预览图", width="small"),
-            "title": st.column_config.TextColumn("商品标题", width="large"),
-            "url": st.column_config.LinkColumn("商品链接", width="large")
-        },
-        disabled=["thumbnail", "title", "url"],
-        hide_index=True,
-        use_container_width=True
-    )
+        for i, item in enumerate(st.session_state.matched_products):
+            col1, col2, col3 = st.columns([1, 2, 6])
+            with col1:
+                # 复选框居中占位
+                st.write("")
+                if st.checkbox("选择", key=f"chk_{i}", label_visibility="collapsed"):
+                    selected_urls.append(item["url"])
+            with col2:
+                # 渲染超大缩略图
+                st.image(item["thumbnail"], width=120)
+            with col3:
+                # 展示标题和干净的链接
+                st.markdown(f"**{item['title']}**\n\n🔗 [{item['url']}]({item['url']})")
+            st.divider()
+            
+        submit_btn = st.form_submit_button("✨ 生成独立商品卡片", type="primary")
     
-    if st.button("✨ 生成独立商品卡片", type="primary"):
-        selected_rows = edited_df[edited_df["Select"] == True]
-        
-        if selected_rows.empty:
+    if submit_btn:
+        if not selected_urls:
             st.warning("请至少勾选一个商品！")
         else:
             st.markdown("### 步骤 3：最终结果")
             tabs = st.tabs(["👁️ 视觉预览", "💻 独立 HTML 代码"])
             
+            # 过滤出被选中的商品数据
+            selected_items = [p for p in st.session_state.matched_products if p["url"] in selected_urls]
+            
             progress_text = "正在逐个深入详情页提取数据..."
             my_bar = st.progress(0, text=progress_text)
             
-            total = len(selected_rows)
-            for i, (_, row) in enumerate(selected_rows.iterrows()):
-                prod_url = row["url"] # 这里提取的已经是去除了参数的 URL
-                prod_title_preview = row["title"]
+            total = len(selected_items)
+            for i, item in enumerate(selected_items):
+                prod_url = item["url"]
+                prod_title_preview = item["title"]
                 
                 details_data = extract_product_details(prod_url)
                 
@@ -262,17 +267,20 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         price=details_data.get("price", ""),
                         details=details_data.get("details", ""),
                         specs=details_data.get("specs", "").replace('\n', '<br>'),
-                        buy_link=details_data.get("buy_link", ""), # 生成在卡片按钮上的 URL
+                        buy_link=details_data.get("buy_link", ""),
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
                     with tabs[0]:
-                        st.components.v1.html(card_html, height=280)
+                        # 将 iframe 的渲染高度从 280 提升到 400，彻底解决底部截断的问题
+                        st.components.v1.html(card_html, height=400)
                     
                     with tabs[1]:
                         st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                         st.code(card_html, language='html')
+                else:
+                    st.error(f"❌ '{prod_title_preview}' 数据抓取失败，请检查该商品页是否可正常访问。")
                 
                 my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
             
-            st.success(f"✅ 成功生成 {total} 个独立商品卡片！请在“独立 HTML 代码”标签页中分别复制使用。")
+            st.success(f"✅ 成功生成独立商品卡片！请在“独立 HTML 代码”标签页中分别复制使用。")
