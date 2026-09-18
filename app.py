@@ -7,7 +7,23 @@ from urllib.parse import urljoin
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
-st.title("🛍️ 博客商品卡片自动生成器 (网格极简版)")
+
+# 注入 CSS 黑魔法：将原生 ? 图标替换为 ⓘ 图标
+st.markdown("""
+<style>
+[data-testid="stTooltipIcon"] svg {
+    display: none !important;
+}
+[data-testid="stTooltipIcon"]::after {
+    content: "ⓘ";
+    font-size: 16px;
+    color: #888;
+    margin-left: 2px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🛍️ 博客商品卡片自动生成器 (左右分栏版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -141,7 +157,7 @@ def extract_product_details(product_url):
 
 # ================= HTML 模板 =================
 html_template = """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; margin-bottom: 5px; font-family: sans-serif; max-width: 800px; min-height: 220px;">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 220px;">
     <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
@@ -212,7 +228,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
     with st.form("selection_form"):
         selected_urls = []
         
-        # 将商品列表按 10 个一组切分，形成 10 列网格
+        # 10 列网格
         cols_per_row = 10
         for i in range(0, len(st.session_state.matched_products), cols_per_row):
             row_items = st.session_state.matched_products[i:i+cols_per_row]
@@ -221,7 +237,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             for col, item in zip(cols, row_items):
                 with col:
                     st.image(item["thumbnail"], use_container_width=True)
-                    # 文字精简为"选择"，防止在 10 列的狭窄空间里折行变丑
+                    # 鼠标悬浮在 ⓘ 上会显示商品标题
                     if st.checkbox("选择", key=f"chk_{item['url']}", help=item['title']):
                         selected_urls.append(item["url"])
             
@@ -257,17 +273,23 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
-                    # 1. 直接展示视觉卡片
-                    st.components.v1.html(card_html, height=280)
+                    st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                     
-                    # 2. 在卡片正下方附加一个折叠面板，点击即可复制这段代码
-                    with st.expander(f"💻 点击查看/复制 HTML 代码 (对应上方商品)"):
+                    # 核心改动：采用左右 1:1 分栏结构
+                    col_left, col_right = st.columns([1, 1], gap="large")
+                    
+                    with col_left:
+                        st.caption("👁️ 视觉预览")
+                        st.components.v1.html(card_html, height=280)
+                        
+                    with col_right:
+                        st.caption("💻 对应 HTML 代码")
                         st.code(card_html, language='html')
                         
-                    st.write("---") # 加一条分割线隔开下一个商品
+                    st.write("---") # 底部添加分割线，区分下一个商品
                 else:
                     st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
                 
                 my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
             
-            st.success(f"✅ 成功生成独立商品卡片！")
+            st.success(f"✅ 成功生成 {total} 个商品卡片！")
