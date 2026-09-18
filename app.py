@@ -39,7 +39,7 @@ def fetch_blog_context(blog_url):
     return soup.get_text(separator='\n', strip=True)[:4000]
 
 def fetch_product_list(category_url):
-    """抓取最多 60 个商品候选池供 AI 海选（新增：抓取缩略图）"""
+    """抓取候选商品，并自动清除 URL 参数"""
     soup = get_soup(category_url)
     if not soup: return []
     
@@ -48,11 +48,14 @@ def fetch_product_list(category_url):
     for a in soup.find_all('a', href=True):
         title = a.get_text(strip=True)
         href = a['href']
-        full_url = urljoin(category_url, href)
         
-        if len(title) > 5 and full_url not in seen_urls and "javascript" not in full_url:
+        # 获取完整链接，并使用 split('?')[0] 删除问号及后面的所有参数
+        full_url = urljoin(category_url, href)
+        clean_url = full_url.split('?')[0]
+        
+        if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
             # 尝试查找对应的缩略图
-            img_url = "https://via.placeholder.com/150?text=No+Image"
+            img_url = "https://via.placeholder.com/300?text=No+Image"
             img = a.find('img')
             if not img and a.parent:
                 img = a.parent.find('img')
@@ -62,16 +65,16 @@ def fetch_product_list(category_url):
             if img:
                 src = img.get('data-src') or img.get('src')
                 if src:
-                    img_url = urljoin(category_url, src)
+                    # 图片链接也清理一下参数，防止加载失败
+                    img_url = urljoin(category_url, src).split('?')[0]
                     
-            seen_urls.add(full_url)
-            products.append({"title": title, "url": full_url, "thumbnail": img_url})
+            seen_urls.add(clean_url)
+            products.append({"title": title, "url": clean_url, "thumbnail": img_url})
             if len(products) >= 60:
                 break
     return products
 
 def ai_match_top_30(blog_text, product_list):
-    """AI 根据博客内容选出最匹配的 30 个，并保留 thumbnail 字段"""
     prompt = f"""
     You are an expert e-commerce recommender.
     I will provide a Blog Post content and a list of product candidates (title + URL + thumbnail).
@@ -90,14 +93,14 @@ def ai_match_top_30(blog_text, product_list):
             model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"} if "json" in prompt.lower() else None,
-            max_tokens=2500
+            max_tokens=4000  # 增大 Token 限制，防止 30 个商品导致截断报错
         )
         result_text = response.choices[0].message.content
         if result_text.startswith("```json"):
             result_text = result_text.replace("```json\n", "").replace("```", "")
         return json.loads(result_text)
     except Exception as e:
-        st.error(f"匹配出错: {e}")
+        st.error(f"匹配出错 (可能是数据返回不完整): {e}")
         return product_list[:30]
 
 def extract_product_details(product_url):
@@ -112,7 +115,7 @@ def extract_product_details(product_url):
         img_tag = soup.find('img')
         if img_tag:
             main_image = img_tag.get('data-src') or img_tag.get('src', '')
-    main_image = urljoin(product_url, main_image) if main_image else "[https://via.placeholder.com/400x300](https://via.placeholder.com/400x300)"
+    main_image = urljoin(product_url, main_image).split('?')[0] if main_image else "[https://via.placeholder.com/400x300](https://via.placeholder.com/400x300)"
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
@@ -139,7 +142,7 @@ def extract_product_details(product_url):
         )
         result = json.loads(response.choices[0].message.content)
         result["image_url"] = main_image
-        result["buy_link"] = product_url
+        result["buy_link"] = product_url # 这里已经是清洗过的干净链接了
         return result
     except:
         return None
@@ -184,7 +187,7 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
         if not pool:
             st.error("未能从商品列表页抓取到商品，请检查链接。")
         else:
-            with st.spinner(f"2/2 已抓取 {len(pool)} 个候选链接，正在请求 AI 根据博客内容海选出最匹配的 30 个..."):
+            with st.spinner(f"2/2 已抓取 {len(pool)} 个干净链接，正在请求 AI 根据博客内容海选..."):
                 raw_top_30 = ai_match_top_30(blog_text, pool)
                 
                 # 数据校验与清洗
@@ -201,9 +204,8 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
                     for item in raw_top_30:
                         if isinstance(item, dict) and "url" in item:
                             item["Select"] = False
-                            # 容错：如果 AI 漏了 thumbnail，给个默认图
                             if "thumbnail" not in item:
-                                item["thumbnail"] = "[https://via.placeholder.com/150?text=No+Image](https://via.placeholder.com/150?text=No+Image)"
+                                item["thumbnail"] = "[https://via.placeholder.com/300?text=No+Image](https://via.placeholder.com/300?text=No+Image)"
                             valid_top_30.append(item)
                 
                 if not valid_top_30:
@@ -214,19 +216,19 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
-    st.info("以下是 AI 结合博客内容海选出的 30 个商品。请勾选您需要生成独立卡片的商品：")
+    st.info("以下是 AI 结合博客内容海选出的商品（链接已自动净化）。请勾选您需要生成独立卡片的商品：")
     
     df = pd.DataFrame(st.session_state.matched_products)
     if "Select" in df.columns:
-        # 重排序，将缩略图插在第二列
         df = df[["Select", "thumbnail", "title", "url"]]
         
+    # 按照截图优化列宽适配
     edited_df = st.data_editor(
         df,
         column_config={
             "Select": st.column_config.CheckboxColumn("生成", default=False, width="small"),
-            "thumbnail": st.column_config.ImageColumn("预览图", width="medium"),
-            "title": st.column_config.TextColumn("商品标题", width="medium"),
+            "thumbnail": st.column_config.ImageColumn("预览图", width="small"),
+            "title": st.column_config.TextColumn("商品标题", width="large"),
             "url": st.column_config.LinkColumn("商品链接", width="large")
         },
         disabled=["thumbnail", "title", "url"],
@@ -248,7 +250,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             
             total = len(selected_rows)
             for i, (_, row) in enumerate(selected_rows.iterrows()):
-                prod_url = row["url"]
+                prod_url = row["url"] # 这里提取的已经是去除了参数的 URL
                 prod_title_preview = row["title"]
                 
                 details_data = extract_product_details(prod_url)
@@ -260,7 +262,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         price=details_data.get("price", ""),
                         details=details_data.get("details", ""),
                         specs=details_data.get("specs", "").replace('\n', '<br>'),
-                        buy_link=details_data.get("buy_link", ""),
+                        buy_link=details_data.get("buy_link", ""), # 生成在卡片按钮上的 URL
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
