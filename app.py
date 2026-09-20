@@ -67,7 +67,6 @@ def fetch_product_list(category_url):
         clean_url = full_url.split('?')[0]
         
         if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
-            # 放宽一点图片查找逻辑，防止错杀真实商品
             img = a.find('img')
             if not img and a.parent:
                 img = a.parent.find('img')
@@ -267,30 +266,43 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                 details_data = extract_product_details(prod_url)
                 
                 if details_data:
+                    # ==========================================
+                    # 核心防御逻辑：处理规格数据，防止大模型抽疯返回列表或字典
+                    # ==========================================
+                    raw_specs = details_data.get("specs", "")
+                    if isinstance(raw_specs, list):
+                        # 如果是列表，用 <br> 拼接起来
+                        specs_str = "<br>".join([str(x) for x in raw_specs])
+                    elif isinstance(raw_specs, dict):
+                        # 如果是字典，格式化成 键: 值 的形式
+                        specs_str = "<br>".join([f"{k}: {v}" for k, v in raw_specs.items()])
+                    else:
+                        # 正常文字，直接替换回车
+                        specs_str = str(raw_specs).replace('\n', '<br>')
+                    # ==========================================
+
                     card_html = html_template.format(
                         image_url=details_data.get("image_url", ""),
                         title=details_data.get("title", ""),
                         price=details_data.get("price", ""),
-                        specs=details_data.get("specs", "").replace('\n', '<br>'),
+                        specs=specs_str,  # 使用洗过的数据
                         buy_link=details_data.get("buy_link", ""),
                         cta_text=details_data.get("cta_text", "Buy Now")
                     )
                     
                     st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                     
-                    # 核心改动：采用左右 1:1 分栏结构
                     col_left, col_right = st.columns([1, 1], gap="large")
                     
                     with col_left:
                         st.caption("👁️ 视觉预览")
-                        # 将高度调大至 450，并允许滚动，彻底解决按钮被裁切的问题
                         st.components.v1.html(card_html, height=450, scrolling=True)
                         
                     with col_right:
                         st.caption("💻 对应 HTML 代码")
                         st.code(card_html, language='html')
                         
-                    st.write("---") # 底部添加分割线，区分下一个商品
+                    st.write("---") 
                 else:
                     st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
                 
