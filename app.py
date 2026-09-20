@@ -40,7 +40,7 @@ if "step" not in st.session_state:
 # ================= 核心爬虫与 AI 函数 =================
 
 def get_soup(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -67,6 +67,7 @@ def fetch_product_list(category_url):
         clean_url = full_url.split('?')[0]
         
         if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
+            # 放宽一点图片查找逻辑，防止错杀真实商品
             img = a.find('img')
             if not img and a.parent:
                 img = a.parent.find('img')
@@ -87,7 +88,9 @@ def ai_match_top_30(blog_text, product_list):
     prompt = f"""
     You are an expert e-commerce recommender.
     I will provide a Blog Post content and a list of product candidates (title + URL + thumbnail).
-    Based on the context, theme, and audience of the Blog Post, select exactly the top 30 most relevant products (or all of them if there are fewer than 30).
+    
+    CRITICAL INSTRUCTION: You MUST select and return AS MANY relevant products as possible, up to a maximum of 30. 
+    DO NOT aggressively filter them out. If there are 30 candidates, return all 30 as long as they are even slightly relevant.
     
     Blog Post:
     {blog_text[:3000]}
@@ -157,11 +160,11 @@ def extract_product_details(product_url):
 
 # ================= HTML 模板 =================
 html_template = """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 220px;">
-    <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px;">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 220px; box-sizing: border-box;">
+    <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px; box-sizing: border-box;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
-    <div style="width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
+    <div style="width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
             <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 15px; line-height: 1.4;">{title}</h3>
             <div style="margin-bottom: 15px;">
@@ -185,7 +188,7 @@ with col1:
 with col2:
     shop_url = st.text_input("商品列表页/着陆页链接 (Landing Page)", placeholder="用于抓取候选商品")
 
-if st.button("🔍 智能抓取并海选 30 个商品"):
+if st.button("🔍 智能抓取并海选商品"):
     if not blog_url or not shop_url:
         st.warning("请填写完整的两个链接！")
     else:
@@ -196,7 +199,7 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
         if not pool:
             st.error("未能从商品列表页抓取到有效商品图片，请检查链接。")
         else:
-            with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在请求 AI 进行语义海选..."):
+            with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在强制要求 AI 尽可能多地保留相关商品 (上限30个)..."):
                 raw_top_30 = ai_match_top_30(blog_text, pool)
                 
                 if isinstance(raw_top_30, dict):
@@ -223,7 +226,7 @@ if st.button("🔍 智能抓取并海选 30 个商品"):
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
-    st.info("以下是 AI 海选出的商品。勾选下方图片确认生成：")
+    st.info(f"以下是 AI 海选出的 {len(st.session_state.matched_products)} 个商品。勾选下方图片确认生成：")
     
     with st.form("selection_form"):
         selected_urls = []
@@ -280,7 +283,8 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                     
                     with col_left:
                         st.caption("👁️ 视觉预览")
-                        st.components.v1.html(card_html, height=280)
+                        # 将高度调大至 450，并允许滚动，彻底解决按钮被裁切的问题
+                        st.components.v1.html(card_html, height=450, scrolling=True)
                         
                     with col_right:
                         st.caption("💻 对应 HTML 代码")
