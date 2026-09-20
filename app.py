@@ -20,7 +20,7 @@ st.title("🛍️ 博客商品卡片自动生成器 (GEO响应式版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=api_key, base_url="[https://api.deepseek.com](https://api.deepseek.com)")
 else:
     st.error("❌ 未读取到 API Key，请检查 Settings -> Secrets")
     st.stop()
@@ -34,7 +34,6 @@ if "selected_template" not in st.session_state: st.session_state.selected_templa
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 # ================= HTML 响应式模板库 =================
-# 注意：CSS中的大括号必须写成 {{ }} 才能被 Python 的 .format() 正确处理
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
@@ -57,14 +56,14 @@ templates = {
     .g-seo-t1-content {{ width: 100%; padding: 15px; }}
 }}
 </style>
-<article itemscope itemtype="https://schema.org/Product" class="g-seo-t1">
+<article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t1">
     <div class="g-seo-t1-img">
         <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
     </div>
     <div class="g-seo-t1-content">
         <div>
             <h3 itemprop="name" class="g-seo-t1-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t1-price-wrap">
+            <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t1-price-wrap">
                 <span class="g-seo-t1-price">🏷️ <span itemprop="price">{price}</span></span>
                 <meta itemprop="url" content="{buy_link}">
             </div>
@@ -97,13 +96,13 @@ templates = {
     .g-seo-t2-btn {{ padding: 10px 16px; font-size: 14px; }}
 }}
 </style>
-<article itemscope itemtype="https://schema.org/Product" class="g-seo-t2">
+<article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t2">
     <div class="g-seo-t2-img">
         <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
     <h3 itemprop="name" class="g-seo-t2-title">{title}</h3>
     <div itemprop="description" class="g-seo-t2-specs">{specs}</div>
-    <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t2-bot">
+    <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t2-bot">
         <span itemprop="price" class="g-seo-t2-price">{price}</span>
         <meta itemprop="url" content="{buy_link}">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t2-btn">{cta_text}</a>
@@ -144,12 +143,12 @@ templates = {
 {json_ld}
 """,
         "item_html": """
-        <article itemscope itemtype="https://schema.org/Product" class="g-seo-t3-item">
+        <article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t3-item">
             <div class="g-seo-t3-img">
                 <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
             </div>
             <h3 itemprop="name" class="g-seo-t3-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t3-bot">
+            <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t3-bot">
                 <span itemprop="price" class="g-seo-t3-price">{price}</span>
                 <meta itemprop="url" content="{buy_link}">
                 <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t3-btn">{cta_text}</a>
@@ -162,7 +161,7 @@ templates = {
 # ================= 核心爬虫与 AI 函数 =================
 
 def get_soup(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -230,8 +229,8 @@ def ai_match_top_30(blog_text, product_list):
             max_tokens=4000
         )
         result_text = response.choices[0].message.content
-        if result_text.startswith("
-```json"): result_text = result_text.replace("```json\n", "").replace("```", "")
+        if result_text.startswith("```json"): 
+            result_text = result_text.replace("```json\n", "").replace("```", "")
         return json.loads(result_text)
     except:
         return product_list[:30]
@@ -254,7 +253,7 @@ def extract_product_details(product_url):
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
-    3. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). ABSOLUTELY DO NOT include long paragraphs, shipping details, warnings, or care notes. Keep it extremely brief (under 80 characters total). If none, output "Standard".
+    3. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). ABSOLUTELY DO NOT include long paragraphs, shipping details, warnings, or care notes. Keep it extremely brief. If none, output "Standard".
     4. "cta_text": Generate a "Buy Now" button text in original language.
     Page Text: {text_content}
     """
@@ -276,12 +275,12 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link):
     price_num = re.sub(r'[^\d.,]', '', price)
     if not price_num: price_num = "0.00"
     ld = {
-        "@context": "[https://schema.org/](https://schema.org/)",
+        "@context": "https://schema.org/",
         "@type": "Product",
         "name": title,
         "image": image_url,
         "description": specs[:150],
-        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "[https://schema.org/InStock](https://schema.org/InStock)"}
+        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "https://schema.org/InStock"}
     }
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
@@ -297,7 +296,7 @@ def generate_carousel_json_ld(products_data):
                 "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": data.get("buy_link", "")}
             }
         })
-    ld = {"@context": "[https://schema.org/](https://schema.org/)", "@type": "ItemList", "itemListElement": items}
+    ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
 # ================= 界面工作流 =================
@@ -341,7 +340,7 @@ with tab1:
 
 with tab2:
     st.info("💡 如果不需要给 Blog 找对应的商品，或者 AI 找不到商品时，请直接在下方粘贴商品详情页链接。一行一个。")
-    direct_urls = st.text_area("输入商品链接：", placeholder="[https://example.com/product-1](https://example.com/product-1)\n[https://example.com/product-2](https://example.com/product-2)", height=150)
+    direct_urls = st.text_area("输入商品链接：", placeholder="https://example.com/product-1\nhttps://example.com/product-2", height=150)
     
     if st.button("🚀 直接获取这些商品信息"):
         if not direct_urls.strip():
