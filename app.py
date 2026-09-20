@@ -24,21 +24,22 @@ else:
     st.error("❌ 未读取到 API Key，请检查 Settings -> Secrets")
     st.stop()
 
-if "matched_products" not in st.session_state:
-    st.session_state.matched_products = []
-if "step" not in st.session_state:
-    st.session_state.step = 1
-if "selected_urls" not in st.session_state:
-    st.session_state.selected_urls = []
-if "selected_template" not in st.session_state:
-    st.session_state.selected_template = ""
+# 状态管理
+if "matched_products" not in st.session_state: st.session_state.matched_products = []
+if "step" not in st.session_state: st.session_state.step = 1
+if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
+if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 
 # ================= HTML 模板库 =================
+# 修复了破图问题，使用了稳定的外部图片
+dummy_image = "https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?auto=format&fit=crop&w=400&q=80"
+
 templates = {
     "模板 1：左右结构 (经典极简)": {
+        "type": "single", # 单个商品独立成一段代码
         "height": 220,
         "html": """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 200px; box-sizing: border-box;">
+<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 200px; box-sizing: border-box; margin-bottom: 20px;">
     <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px; box-sizing: border-box;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
@@ -58,9 +59,10 @@ templates = {
 """
     },
     "模板 2：上下结构 (圆润多巴胺)": {
+        "type": "single",
         "height": 450,
         "html": """
-<div style="background-color: #FFF8EC; border-radius: 24px; padding: 18px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto;">
+<div style="background-color: #FFF8EC; border-radius: 24px; padding: 18px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
     <div style="width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
@@ -72,13 +74,36 @@ templates = {
     </div>
 </div>
 """
+    },
+    "模板 3：多商品轮播 (组合模块)": {
+        "type": "carousel", # 多个商品打包成一段代码
+        "height": 400,
+        "html": """
+<!-- 轮播图外层容器，支持横向滚动 -->
+<div style="display: flex; overflow-x: auto; gap: 16px; padding: 20px 10px; background-color: #FAFAFA; font-family: sans-serif; -webkit-overflow-scrolling: touch; border-radius: 12px;">
+    {carousel_items}
+</div>
+""",
+        "item_html": """
+    <!-- 单个轮播卡片 -->
+    <div style="flex: 0 0 auto; width: 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="width: 100%; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center;">
+            <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+        </div>
+        <h3 style="margin: 0 0 8px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+            <span style="color: #333333; font-size: 16px; font-weight: 800;">{price}</span>
+            <a href="{buy_link}" target="_blank" style="background-color: #E8D3C3; color: #6D4C41; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: bold;">{cta_text}</a>
+        </div>
+    </div>
+"""
     }
 }
 
 # ================= 核心爬虫与 AI 函数 =================
 
 def get_soup(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -101,7 +126,6 @@ def fetch_product_list(category_url):
         href = a['href']
         full_url = urljoin(category_url, href)
         clean_url = full_url.split('?')[0]
-        
         if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
             img = a.find('img')
             if not img and a.parent: img = a.parent.find('img')
@@ -116,7 +140,6 @@ def fetch_product_list(category_url):
     return products
 
 def fetch_direct_urls(url_list_text):
-    """处理用户直接输入的URL列表"""
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     products = []
     for url in urls:
@@ -167,8 +190,9 @@ def extract_product_details(product_url):
     main_image = urljoin(product_url, main_image).split('?')[0] if main_image else "[https://dummyimage.com/400x400/f5f5f5/a3a3a3.png&text=No+Image](https://dummyimage.com/400x400/f5f5f5/a3a3a3.png&text=No+Image)"
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
+    # 统一提取逻辑：不再强求提取长篇 details，加快速度，只提取核心信息
     prompt = f"""
-    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
+    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE.
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
@@ -275,22 +299,31 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
 if st.session_state.step >= 3 and st.session_state.selected_urls:
     st.markdown("### 步骤 3：选择商品卡片模板")
     
-    # 模拟渲染用的假数据（占位符）
     dummy_data = {
-        "image_url": "[https://dummyimage.com/400x400/fadcd9/333333.png&text=Preview](https://dummyimage.com/400x400/fadcd9/333333.png&text=Preview)",
-        "title": "Custom Halloween Decoration",
-        "price": "$28.00",
-        "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm",
+        "image_url": dummy_image,
+        "title": "Premium Wireless Headphones",
+        "price": "$129.99",
+        "specs": "Color: Beige &nbsp;•&nbsp; Active Noise Cancelling",
         "buy_link": "#",
         "cta_text": "Add To Cart"
     }
     
-    # 动态渲染两列模板预览
+    # 动态渲染三列模板预览（横向平铺，下方带独立生成按钮）
     tmpl_cols = st.columns(len(templates))
     for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
         with col:
             st.markdown(f"**{tmpl_name}**")
-            st.components.v1.html(tmpl_data["html"].format(**dummy_data), height=tmpl_data["height"] + 20)
+            
+            # 如果是轮播图模板，需要渲染假的数据集合
+            if tmpl_data["type"] == "carousel":
+                dummy_item = tmpl_data["item_html"].format(**dummy_data)
+                # 塞三个假商品进去，演示轮播效果
+                preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3)
+            else:
+                preview_html = tmpl_data["html"].format(**dummy_data)
+                
+            st.components.v1.html(preview_html, height=tmpl_data["height"] + 20)
+            
             if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
                 st.session_state.selected_template = tmpl_name
                 st.session_state.step = 4
@@ -301,11 +334,14 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
     st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}**")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
-    selected_tmpl_html = templates[st.session_state.selected_template]["html"]
-    render_height = templates[st.session_state.selected_template]["height"] + 20
+    tmpl_config = templates[st.session_state.selected_template]
+    render_height = tmpl_config["height"] + 40
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     total = len(selected_items)
+    
+    # 用于收集所有商品的数据（轮播图模式专用）
+    all_extracted_data = []
     
     for i, item in enumerate(selected_items):
         prod_url = item["url"]
@@ -317,31 +353,59 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             if isinstance(raw_specs, list): specs_str = "&nbsp;•&nbsp;".join([str(x) for x in raw_specs])
             elif isinstance(raw_specs, dict): specs_str = "&nbsp;•&nbsp;".join([f"{k}: {v}" for k, v in raw_specs.items()])
             else: specs_str = str(raw_specs).replace('\n', '&nbsp;•&nbsp;')
+            details_data["specs_formatted"] = specs_str
             
-            card_html = selected_tmpl_html.format(
-                image_url=details_data.get("image_url", ""),
-                title=details_data.get("title", ""),
-                price=details_data.get("price", ""),
-                specs=specs_str,
-                buy_link=details_data.get("buy_link", ""),
-                cta_text=details_data.get("cta_text", "Buy Now")
-            )
+            all_extracted_data.append(details_data)
             
-            st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
-            col_left, col_right = st.columns([1, 1], gap="large")
-            
-            with col_left:
-                st.caption("👁️ 视觉预览")
-                st.components.v1.html(card_html, height=render_height, scrolling=True)
-            with col_right:
-                st.caption("💻 对应 HTML 代码")
-                with st.expander("点击展开 / 复制 HTML 代码"):
-                    st.code(card_html, language='html')
+            # ========== 独立卡片模式输出 ==========
+            if tmpl_config["type"] == "single":
+                card_html = tmpl_config["html"].format(
+                    image_url=details_data.get("image_url", ""),
+                    title=details_data.get("title", ""),
+                    price=details_data.get("price", ""),
+                    specs=specs_str,
+                    buy_link=details_data.get("buy_link", ""),
+                    cta_text=details_data.get("cta_text", "Buy Now")
+                )
                 
-            st.write("---") 
+                st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
+                col_left, col_right = st.columns([1, 1], gap="large")
+                with col_left:
+                    st.components.v1.html(card_html, height=render_height, scrolling=True)
+                with col_right:
+                    with st.expander("点击展开 / 复制 HTML 代码"):
+                        st.code(card_html, language='html')
+                st.write("---") 
         else:
             st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
         
-        my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
-    
-    st.success(f"✅ 成功生成 {total} 个商品卡片！")
+        my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个商品...")
+        
+    # ========== 组合轮播模式输出 ==========
+    if tmpl_config["type"] == "carousel" and all_extracted_data:
+        st.markdown("**📝 以下是包含所有勾选商品的轮播图代码组件**")
+        
+        # 拼接所有的轮播子项
+        carousel_items_str = ""
+        for data in all_extracted_data:
+            carousel_items_str += tmpl_config["item_html"].format(
+                image_url=data.get("image_url", ""),
+                title=data.get("title", ""),
+                price=data.get("price", ""),
+                buy_link=data.get("buy_link", ""),
+                cta_text=data.get("cta_text", "Buy Now")
+            )
+            
+        # 塞入外层容器
+        final_carousel_html = tmpl_config["html"].replace("{carousel_items}", carousel_items_str)
+        
+        col_left, col_right = st.columns([1, 1], gap="large")
+        with col_left:
+            st.caption("👁️ 视觉预览 (可左右滑动)")
+            st.components.v1.html(final_carousel_html, height=render_height, scrolling=True)
+        with col_right:
+            st.caption("💻 对应完整 HTML 代码")
+            with st.expander("点击展开 / 复制 HTML 代码"):
+                st.code(final_carousel_html, language='html')
+                
+    st.success("✅ 全部处理完毕！")
