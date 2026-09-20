@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
 import json
+import re
 from urllib.parse import urljoin
 
 # ================= 配置与初始化 =================
@@ -12,11 +13,10 @@ st.markdown("""
 <style>
 [data-testid="stTooltipIcon"] svg { display: none !important; }
 [data-testid="stTooltipIcon"]::after { content: "ⓘ"; font-size: 16px; color: #888; margin-left: 2px; }
-/* 隐藏 Streamlit 默认的 radio 按钮（虽然我们已经去掉了）和优化布局 */
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛍️ 博客商品卡片自动生成器 (多模板专业版)")
+st.title("🛍️ 博客商品卡片自动生成器 (GEO & SEO 优化版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -31,79 +31,79 @@ if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 
 # ================= HTML 模板库 =================
-# 使用永久稳定的高质量万圣节占位图，彻底解决破图问题
-dummy_image = "https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=400&auto=format&fit=crop"
+# 使用 SVG Base64 编码，100% 免疫网络防盗链，绝对不会破图
+dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
-        "height": 220,
         "html": """
-<div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 200px; box-sizing: border-box; margin-bottom: 20px;">
+<!-- 适配 GEO/SEO 的结构化商品卡片 -->
+<article itemscope itemtype="https://schema.org/Product" style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 200px; box-sizing: border-box; margin-bottom: 20px;">
     <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px; box-sizing: border-box;">
-        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
+        <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;" alt="{title}">
     </div>
     <div style="width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
-            <div style="margin-bottom: 15px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px;">🏷️ {price}</span>
+            <h3 itemprop="name" style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
+            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" style="margin-bottom: 15px;">
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px;">🏷️ <span itemprop="price">{price}</span></span>
+                <meta itemprop="url" content="{buy_link}">
             </div>
-            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 100px; overflow-y: auto;">
+            <div itemprop="description" style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 120px; overflow-y: auto;">
                 <strong>⚙️ </strong>{specs}
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#43D8C9'" onmouseout="this.style.backgroundColor='#FF6F59'">{cta_text}</a>
     </div>
-</div>
+</article>
+{json_ld}
 """
     },
     "模板 2：上下结构 (圆润多巴胺)": {
         "type": "single",
-        "height": 450,
         "html": """
-<div style="background-color: #FFF8EC; border-radius: 24px; padding: 18px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
+<!-- 适配 GEO/SEO 的结构化商品卡片 -->
+<article itemscope itemtype="https://schema.org/Product" style="background-color: #FFF8EC; border-radius: 24px; padding: 18px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
     <div style="width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center;">
-        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+        <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
-    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
-    <div style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500;">{specs}</div>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">{cta_text}</a>
+    <h3 itemprop="name" style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
+    <div itemprop="description" style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500;">{specs}</div>
+    <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" style="display: flex; justify-content: space-between; align-items: center;">
+        <span itemprop="price" style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
+        <meta itemprop="url" content="{buy_link}">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">{cta_text}</a>
     </div>
-</div>
+</article>
+{json_ld}
 """
     },
     "模板 3：多商品轮播 (单行极简)": {
         "type": "carousel",
-        "height": 450,
         "html": """
-<!-- 轮播图外层容器 -->
-<div style="background-color: #FDFBF7; padding: 40px 0; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px;">
-    <!-- 滑动轨道：利用 padding calc 实现首尾卡片可居中，结合 scroll-snap 实现吸附 -->
-    <div style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 20px calc(50% - 130px); gap: 24px; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
-        <style>
-            /* 隐藏 Webkit 内核的滚动条以保持美观 */
-            div::-webkit-scrollbar { display: none; }
-        </style>
+<!-- 适配 GEO/SEO 的商品轮播模块 -->
+<section aria-label="Product Carousel" style="background-color: #FDFBF7; padding: 30px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px;">
+    <!-- 滑动轨道 -->
+    <div style="display: flex; overflow-x: auto; gap: 16px; padding: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: thin;">
         {carousel_items}
     </div>
-</div>
+</section>
+{json_ld}
 """,
         "item_html": """
-        <!-- 单个轮播卡片：加入 onclick 实现点击即平滑居中 -->
-        <div onclick="this.scrollIntoView({{behavior: 'smooth', inline: 'center', block: 'nearest'}});" style="flex: 0 0 260px; scroll-snap-align: center; background-color: #FFFFFF; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.3s ease;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
-            <div style="width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 20px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center;">
-                <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+        <!-- 单个轮播卡片 -->
+        <article itemscope itemtype="https://schema.org/Product" style="flex: 0 0 auto; width: 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="width: 100%; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center;">
+                <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
             </div>
-            <!-- 仅保留名称，最多两行 -->
-            <h3 style="margin: 0 0 15px 0; color: #333333; font-size: 16px; font-weight: bold; line-height: 1.4; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 44px;">{title}</h3>
-            <!-- 价格 -->
-            <span style="color: #111111; font-size: 20px; font-weight: 900; margin-bottom: 15px;">{price}</span>
-            <!-- 购买按钮 -->
-            <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 10px 28px; border-radius: 24px; font-size: 14px; font-weight: bold; transition: background-color 0.3s;" onmouseover="this.style.backgroundColor='#C2A594'" onmouseout="this.style.backgroundColor='#D4BBAA'">{cta_text}</a>
-        </div>
+            <h3 itemprop="name" style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{title}</h3>
+            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+                <span itemprop="price" style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
+                <meta itemprop="url" content="{buy_link}">
+                <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold;">{cta_text}</a>
+            </div>
+        </article>
 """
     }
 }
@@ -198,9 +198,8 @@ def extract_product_details(product_url):
     main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 不再强制提取详细描述，提高速度
     prompt = f"""
-    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
+    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE.
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
@@ -221,6 +220,54 @@ def extract_product_details(product_url):
         return result
     except:
         return None
+
+def generate_single_json_ld(title, image_url, price, specs, buy_link):
+    """为单张卡片生成标准的 Product JSON-LD 结构化数据"""
+    price_num = re.sub(r'[^\d.,]', '', price)
+    if not price_num: price_num = "0.00"
+    ld = {
+        "@context": "[https://schema.org/](https://schema.org/)",
+        "@type": "Product",
+        "name": title,
+        "image": image_url,
+        "description": specs[:150],
+        "offers": {
+            "@type": "Offer",
+            "price": price_num,
+            "priceCurrency": "USD",
+            "url": buy_link,
+            "availability": "[https://schema.org/InStock](https://schema.org/InStock)"
+        }
+    }
+    return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
+
+def generate_carousel_json_ld(products_data):
+    """为轮播图生成 ItemList 结构化数据"""
+    items = []
+    for i, data in enumerate(products_data):
+        price_num = re.sub(r'[^\d.,]', '', data.get("price", ""))
+        if not price_num: price_num = "0.00"
+        items.append({
+            "@type": "ListItem",
+            "position": i + 1,
+            "item": {
+                "@type": "Product",
+                "name": data.get("title", ""),
+                "image": data.get("image_url", ""),
+                "offers": {
+                    "@type": "Offer",
+                    "price": price_num,
+                    "priceCurrency": "USD",
+                    "url": data.get("buy_link", "")
+                }
+            }
+        })
+    ld = {
+        "@context": "[https://schema.org/](https://schema.org/)",
+        "@type": "ItemList",
+        "itemListElement": items
+    }
+    return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
 # ================= 界面工作流 =================
 
@@ -307,30 +354,34 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
 if st.session_state.step >= 3 and st.session_state.selected_urls:
     st.markdown("### 步骤 3：选择商品卡片模板")
     
-    # 高清稳定的假数据，用于完美渲染预览
     dummy_data = {
         "image_url": dummy_image,
         "title": "Custom Halloween Decoration",
         "price": "$28.00",
         "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm",
         "buy_link": "#",
-        "cta_text": "Add To Cart"
+        "cta_text": "Add To Cart",
+        "json_ld": "" # 预览时不需要输出结构化数据
     }
     
-    # 动态渲染模板预览（横向平铺，下方带独立生成按钮）
     tmpl_cols = st.columns(len(templates))
     for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
         with col:
             st.markdown(f"**{tmpl_name}**")
             
-            # 如果是轮播图模板，需要组合 3 个假卡片来演示效果
             if tmpl_data["type"] == "carousel":
                 dummy_item = tmpl_data["item_html"].format(**dummy_data)
-                preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3)
+                preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3).format(json_ld="")
             else:
                 preview_html = tmpl_data["html"].format(**dummy_data)
-                
-            st.components.v1.html(preview_html, height=tmpl_data["height"] + 20, scrolling=True)
+            
+            # 使用 scale(0.85) 将卡片按比例缩小显示，并固定外部高度为 350，确保所有底部的“生成”按钮完美水平对齐
+            preview_wrapper = f"""
+            <div style="transform: scale(0.85); transform-origin: top center; width: 117%;">
+                {preview_html}
+            </div>
+            """
+            st.components.v1.html(preview_wrapper, height=350, scrolling=True)
             
             if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
                 st.session_state.selected_template = tmpl_name
@@ -339,15 +390,13 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4 and st.session_state.selected_template:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}**")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已附带 SEO 结构化数据支持)")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
     tmpl_config = templates[st.session_state.selected_template]
-    render_height = tmpl_config["height"] + 40
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     total = len(selected_items)
-    
     all_extracted_data = []
     
     for i, item in enumerate(selected_items):
@@ -362,24 +411,35 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             else: specs_str = str(raw_specs).replace('\n', '&nbsp;•&nbsp;')
             
             details_data["specs_formatted"] = specs_str
+            details_data["specs_plain"] = str(raw_specs).replace('\n', ' ')
             all_extracted_data.append(details_data)
             
             # ========== 独立卡片模式输出 ==========
             if tmpl_config["type"] == "single":
+                
+                ld_script = generate_single_json_ld(
+                    details_data.get("title", ""), 
+                    details_data.get("image_url", ""), 
+                    details_data.get("price", ""), 
+                    details_data.get("specs_plain", ""), 
+                    details_data.get("buy_link", "")
+                )
+                
                 card_html = tmpl_config["html"].format(
                     image_url=details_data.get("image_url", ""),
                     title=details_data.get("title", ""),
                     price=details_data.get("price", ""),
                     specs=specs_str,
                     buy_link=details_data.get("buy_link", ""),
-                    cta_text=details_data.get("cta_text", "Buy Now")
+                    cta_text=details_data.get("cta_text", "Buy Now"),
+                    json_ld=ld_script
                 )
                 
                 st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                 col_left, col_right = st.columns([1, 1], gap="large")
                 with col_left:
                     st.caption("👁️ 视觉预览")
-                    st.components.v1.html(card_html, height=render_height, scrolling=True)
+                    st.components.v1.html(card_html, height=450, scrolling=True)
                 with col_right:
                     st.caption("💻 对应 HTML 代码")
                     with st.expander("点击展开 / 复制 HTML 代码"):
@@ -394,6 +454,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
     if tmpl_config["type"] == "carousel" and all_extracted_data:
         st.markdown("**📝 以下是包含所有勾选商品的轮播图代码组件**")
         
+        ld_script = generate_carousel_json_ld(all_extracted_data)
+        
         carousel_items_str = ""
         for data in all_extracted_data:
             carousel_items_str += tmpl_config["item_html"].format(
@@ -404,15 +466,15 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                 cta_text=data.get("cta_text", "Buy Now")
             )
             
-        final_carousel_html = tmpl_config["html"].replace("{carousel_items}", carousel_items_str)
+        final_carousel_html = tmpl_config["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         
         col_left, col_right = st.columns([1, 1], gap="large")
         with col_left:
-            st.caption("👁️ 视觉预览 (可左右滑动，点击任意卡片即可自动居中)")
-            st.components.v1.html(final_carousel_html, height=render_height, scrolling=True)
+            st.caption("👁️ 视觉预览 (可横向滑动浏览)")
+            st.components.v1.html(final_carousel_html, height=450, scrolling=True)
         with col_right:
             st.caption("💻 对应完整 HTML 代码")
             with st.expander("点击展开 / 复制完整轮播代码"):
                 st.code(final_carousel_html, language='html')
                 
-    st.success("✅ 全部处理完毕！")
+    st.success("✅ 全部处理完毕！已自动注入 JSON-LD 结构化数据。")
