@@ -34,29 +34,29 @@ if "selected_template" not in st.session_state: st.session_state.selected_templa
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 # ================= HTML 响应式模板库 =================
+# 注意：CSS中的大括号必须写成 {{ }} 才能被 Python 的 .format() 正确处理
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
         "html": """
 <style>
-.g-seo-t1 { display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; }
-.g-seo-t1-img { width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box; }
-.g-seo-t1-img img { width: 100%; height: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; }
-.g-seo-t1-content { width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
-.g-seo-t1-title { margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.g-seo-t1-price-wrap { margin-bottom: 12px; }
-.g-seo-t1-price { background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
-.g-seo-t1-specs { background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 120px; overflow-y: auto; }
-.g-seo-t1-btn { display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; }
-.g-seo-t1-btn:hover { background-color: #43D8C9; }
-/* 移动端自适应：宽度小于 640px 时自动变为上下堆叠结构 */
-@media (max-width: 640px) {
-    .g-seo-t1 { flex-direction: column; }
-    .g-seo-t1-img { width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }
-    .g-seo-t1-content { width: 100%; padding: 15px; }
-}
+.g-seo-t1 {{ display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; }}
+.g-seo-t1-img {{ width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box; }}
+.g-seo-t1-img img {{ width: 100%; height: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; }}
+.g-seo-t1-content {{ width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }}
+.g-seo-t1-title {{ margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
+.g-seo-t1-price-wrap {{ margin-bottom: 12px; }}
+.g-seo-t1-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }}
+.g-seo-t1-specs {{ background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 120px; overflow-y: auto; }}
+.g-seo-t1-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; }}
+.g-seo-t1-btn:hover {{ background-color: #43D8C9; }}
+/* 移动端自适应 */
+@media (max-width: 640px) {{
+    .g-seo-t1 {{ flex-direction: column; }}
+    .g-seo-t1-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
+    .g-seo-t1-content {{ width: 100%; padding: 15px; }}
+}}
 </style>
-<!-- 适配 GEO/SEO 的结构化商品卡片 -->
 <article itemscope itemtype="https://schema.org/Product" class="g-seo-t1">
     <div class="g-seo-t1-img">
         <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
@@ -82,20 +82,20 @@ templates = {
         "type": "single",
         "html": """
 <style>
-.g-seo-t2 { background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto; }
-.g-seo-t2-img { width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }
-.g-seo-t2-title { margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.g-seo-t2-specs { color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; }
-.g-seo-t2-bot { display: flex; justify-content: space-between; align-items: center; }
-.g-seo-t2-price { color: #F59E0B; font-size: 22px; font-weight: 800; }
-.g-seo-t2-btn { background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s; }
-.g-seo-t2-btn:hover { opacity: 0.8; }
-/* 移动端自适应：在极小屏幕下缩小字号和边距 */
-@media (max-width: 380px) {
-    .g-seo-t2 { padding: 15px; }
-    .g-seo-t2-price { font-size: 18px; }
-    .g-seo-t2-btn { padding: 10px 16px; font-size: 14px; }
-}
+.g-seo-t2 {{ background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto; }}
+.g-seo-t2-img {{ width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t2-title {{ margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
+.g-seo-t2-specs {{ color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; }}
+.g-seo-t2-bot {{ display: flex; justify-content: space-between; align-items: center; }}
+.g-seo-t2-price {{ color: #F59E0B; font-size: 22px; font-weight: 800; }}
+.g-seo-t2-btn {{ background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s; }}
+.g-seo-t2-btn:hover {{ opacity: 0.8; }}
+/* 移动端自适应 */
+@media (max-width: 380px) {{
+    .g-seo-t2 {{ padding: 15px; }}
+    .g-seo-t2-price {{ font-size: 18px; }}
+    .g-seo-t2-btn {{ padding: 10px 16px; font-size: 14px; }}
+}}
 </style>
 <article itemscope itemtype="https://schema.org/Product" class="g-seo-t2">
     <div class="g-seo-t2-img">
@@ -116,27 +116,26 @@ templates = {
         "type": "carousel",
         "html": """
 <style>
-.g-seo-t3-sec { background-color: #FDFBF7; padding: 30px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px; box-sizing: border-box; }
-.g-seo-t3-track { display: flex; overflow-x: auto; gap: 16px; padding: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-.g-seo-t3-track::-webkit-scrollbar { display: none; }
-.g-seo-t3-item { flex: 0 0 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; transition: transform 0.3s ease; }
-.g-seo-t3-item:hover { transform: translateY(-5px); }
-.g-seo-t3-img { width: 100%; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; }
-.g-seo-t3-title { margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.g-seo-t3-bot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-.g-seo-t3-price { color: #111111; font-size: 16px; font-weight: 800; }
-.g-seo-t3-btn { background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background-color 0.3s; }
-.g-seo-t3-btn:hover { background-color: #C2A594; }
-/* 移动端自适应：缩小卡片宽度，确保一屏能露出第二张卡片的边缘，提示用户滑动 */
-@media (max-width: 640px) {
-    .g-seo-t3-sec { padding: 20px 5px; }
-    .g-seo-t3-item { flex: 0 0 170px; padding: 12px; }
-    .g-seo-t3-title { font-size: 13px; margin-bottom: 8px; }
-    .g-seo-t3-price { font-size: 14px; }
-    .g-seo-t3-btn { padding: 6px 10px; font-size: 11px; }
-}
+.g-seo-t3-sec {{ background-color: #FDFBF7; padding: 30px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px; box-sizing: border-box; }}
+.g-seo-t3-track {{ display: flex; overflow-x: auto; gap: 16px; padding: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }}
+.g-seo-t3-track::-webkit-scrollbar {{ display: none; }}
+.g-seo-t3-item {{ flex: 0 0 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; transition: transform 0.3s ease; }}
+.g-seo-t3-item:hover {{ transform: translateY(-5px); }}
+.g-seo-t3-img {{ width: 100%; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t3-title {{ margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
+.g-seo-t3-bot {{ display: flex; justify-content: space-between; align-items: center; margin-top: auto; }}
+.g-seo-t3-price {{ color: #111111; font-size: 16px; font-weight: 800; }}
+.g-seo-t3-btn {{ background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background-color 0.3s; }}
+.g-seo-t3-btn:hover {{ background-color: #C2A594; }}
+/* 移动端自适应 */
+@media (max-width: 640px) {{
+    .g-seo-t3-sec {{ padding: 20px 5px; }}
+    .g-seo-t3-item {{ flex: 0 0 170px; padding: 12px; }}
+    .g-seo-t3-title {{ font-size: 13px; margin-bottom: 8px; }}
+    .g-seo-t3-price {{ font-size: 14px; }}
+    .g-seo-t3-btn {{ padding: 6px 10px; font-size: 11px; }}
+}}
 </style>
-<!-- 适配 GEO/SEO 的商品轮播模块 -->
 <section aria-label="Product Carousel" class="g-seo-t3-sec">
     <div class="g-seo-t3-track">
         {carousel_items}
