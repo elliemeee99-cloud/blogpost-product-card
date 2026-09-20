@@ -47,7 +47,7 @@ templates = {
 .g-seo-t1-title {{ margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
 .g-seo-t1-price-wrap {{ margin-bottom: 12px; }}
 .g-seo-t1-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }}
-.g-seo-t1-specs {{ background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; max-height: 120px; overflow-y: auto; }}
+.g-seo-t1-specs {{ background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
 .g-seo-t1-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; }}
 .g-seo-t1-btn:hover {{ background-color: #43D8C9; }}
 /* 移动端自适应 */
@@ -85,7 +85,7 @@ templates = {
 .g-seo-t2 {{ background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto; }}
 .g-seo-t2-img {{ width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }}
 .g-seo-t2-title {{ margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t2-specs {{ color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; }}
+.g-seo-t2-specs {{ color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 50px; }}
 .g-seo-t2-bot {{ display: flex; justify-content: space-between; align-items: center; }}
 .g-seo-t2-price {{ color: #F59E0B; font-size: 22px; font-weight: 800; }}
 .g-seo-t2-btn {{ background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s; }}
@@ -162,7 +162,7 @@ templates = {
 # ================= 核心爬虫与 AI 函数 =================
 
 def get_soup(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -230,7 +230,8 @@ def ai_match_top_30(blog_text, product_list):
             max_tokens=4000
         )
         result_text = response.choices[0].message.content
-        if result_text.startswith("```json"): result_text = result_text.replace("```json\n", "").replace("```", "")
+        if result_text.startswith("
+```json"): result_text = result_text.replace("```json\n", "").replace("```", "")
         return json.loads(result_text)
     except:
         return product_list[:30]
@@ -253,7 +254,7 @@ def extract_product_details(product_url):
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
-    3. "specs": Extract the specifications list. If none, output "Standard".
+    3. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). ABSOLUTELY DO NOT include long paragraphs, shipping details, warnings, or care notes. Keep it extremely brief (under 80 characters total). If none, output "Standard".
     4. "cta_text": Generate a "Buy Now" button text in original language.
     Page Text: {text_content}
     """
