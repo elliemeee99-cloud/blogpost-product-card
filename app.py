@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛍️ 博客商品卡片自动生成器 (多模板版)")
+st.title("🛍️ 博客商品卡片自动生成器 (多模板专业版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -30,11 +30,13 @@ if "step" not in st.session_state:
     st.session_state.step = 1
 if "selected_urls" not in st.session_state:
     st.session_state.selected_urls = []
+if "selected_template" not in st.session_state:
+    st.session_state.selected_template = ""
 
 # ================= HTML 模板库 =================
 templates = {
-    "模板 1：左右结构 (极简无描述)": {
-        "height": 250,
+    "模板 1：左右结构 (经典极简)": {
+        "height": 220,
         "html": """
 <div style="display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; max-width: 100%; min-height: 200px; box-sizing: border-box;">
     <div style="width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 10px; box-sizing: border-box;">
@@ -56,15 +58,14 @@ templates = {
 """
     },
     "模板 2：上下结构 (圆润多巴胺)": {
-        "height": 550,
+        "height": 450,
         "html": """
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 18px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto;">
     <div style="width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center;">
         <img src="{image_url}" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
-    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 20px; font-weight: 800; line-height: 1.3;">{title}</h3>
-    <div style="color: #A1887F; font-size: 12px; margin-bottom: 12px; font-weight: 500;">{specs}</div>
-    <div style="color: #5D4037; font-size: 14px; margin-bottom: 24px; line-height: 1.5; font-weight: 500;">{details}</div>
+    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3;">{title}</h3>
+    <div style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500;">{specs}</div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
         <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">{cta_text}</a>
@@ -114,6 +115,22 @@ def fetch_product_list(category_url):
                     if len(products) >= 60: break
     return products
 
+def fetch_direct_urls(url_list_text):
+    """处理用户直接输入的URL列表"""
+    urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
+    products = []
+    for url in urls:
+        clean_url = url.split('?')[0]
+        soup = get_soup(clean_url)
+        if soup:
+            title = soup.title.string if soup.title else "未命名商品"
+            img_url = "https://dummyimage.com/300x300/f5f5f5/a3a3a3.png&text=No+Image"
+            og_img = soup.find('meta', property='og:image')
+            if og_img and og_img.get('content'):
+                img_url = urljoin(clean_url, og_img['content']).split('?')[0]
+            products.append({"title": title, "url": clean_url, "thumbnail": img_url})
+    return products
+
 def ai_match_top_30(blog_text, product_list):
     prompt = f"""
     You are an expert e-commerce recommender.
@@ -147,17 +164,16 @@ def extract_product_details(product_url):
     else:
         img_tag = soup.find('img')
         if img_tag: main_image = img_tag.get('data-src') or img_tag.get('src', '')
-    main_image = urljoin(product_url, main_image).split('?')[0] if main_image else "[https://via.placeholder.com/400x300](https://via.placeholder.com/400x300)"
+    main_image = urljoin(product_url, main_image).split('?')[0] if main_image else "[https://dummyimage.com/400x400/f5f5f5/a3a3a3.png&text=No+Image](https://dummyimage.com/400x400/f5f5f5/a3a3a3.png&text=No+Image)"
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
     prompt = f"""
-    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE. No Chinese.
+    Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
     Extract into JSON:
     1. "title": The product name.
     2. "price": The price (e.g., "28,00 €").
-    3. "specs": Extract the specifications list.
-    4. "details": Extract a brief 1-2 sentence description of the product.
-    5. "cta_text": Generate a "Buy Now" button text in original language.
+    3. "specs": Extract the specifications list. If none, output "Standard".
+    4. "cta_text": Generate a "Buy Now" button text in original language.
     Page Text: {text_content}
     """
     try:
@@ -177,43 +193,64 @@ def extract_product_details(product_url):
 # ================= 界面工作流 =================
 
 st.markdown("### 步骤 1：输入数据源")
-col1, col2 = st.columns(2)
-with col1: blog_url = st.text_input("博客文章链接 (Blog Post URL)", placeholder="用于语义匹配分析")
-with col2: shop_url = st.text_input("商品列表页/着陆页链接 (Landing Page)", placeholder="用于抓取候选商品")
 
-if st.button("🔍 智能抓取并海选商品"):
-    if not blog_url or not shop_url: st.warning("请填写完整的两个链接！")
-    else:
-        with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
-            blog_text = fetch_blog_context(blog_url)
-            pool = fetch_product_list(shop_url)
-        if not pool: st.error("未能从商品列表页抓取到有效图片，请检查链接。")
+tab1, tab2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式 (填链接)"])
+
+with tab1:
+    col1, col2 = st.columns(2)
+    with col1: blog_url = st.text_input("博客文章链接 (Blog Post URL)", placeholder="用于语义匹配分析", key="ai_blog")
+    with col2: shop_url = st.text_input("商品列表页/着陆页链接 (Landing Page)", placeholder="用于抓取候选商品", key="ai_shop")
+    
+    if st.button("🔍 抓取并智能海选"):
+        if not blog_url or not shop_url: st.warning("请填写完整的两个链接！")
         else:
-            with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在请求 AI 海选..."):
-                raw_top_30 = ai_match_top_30(blog_text, pool)
-                if isinstance(raw_top_30, dict):
-                    extracted = []
-                    for val in raw_top_30.values():
-                        if isinstance(val, list):
-                            extracted = val
-                            break
-                    raw_top_30 = extracted if extracted else [raw_top_30]
-                
-                valid_top_30 = []
-                if isinstance(raw_top_30, list):
-                    for item in raw_top_30:
-                        if isinstance(item, dict) and "url" in item:
-                            if "thumbnail" not in item: item["thumbnail"] = "[https://via.placeholder.com/300?text=No+Image](https://via.placeholder.com/300?text=No+Image)"
-                            valid_top_30.append(item)
-                
-                if valid_top_30:
-                    st.session_state.matched_products = valid_top_30
+            with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
+                blog_text = fetch_blog_context(blog_url)
+                pool = fetch_product_list(shop_url)
+            if not pool: st.error("未能抓取到有效图片，请检查链接。")
+            else:
+                with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在请求 AI 海选..."):
+                    raw_top_30 = ai_match_top_30(blog_text, pool)
+                    if isinstance(raw_top_30, dict):
+                        extracted = []
+                        for val in raw_top_30.values():
+                            if isinstance(val, list):
+                                extracted = val
+                                break
+                        raw_top_30 = extracted if extracted else [raw_top_30]
+                    
+                    valid_top_30 = []
+                    if isinstance(raw_top_30, list):
+                        for item in raw_top_30:
+                            if isinstance(item, dict) and "url" in item:
+                                if "thumbnail" not in item: item["thumbnail"] = "[https://dummyimage.com/300x300/f5f5f5/a3a3a3.png&text=No+Image](https://dummyimage.com/300x300/f5f5f5/a3a3a3.png&text=No+Image)"
+                                valid_top_30.append(item)
+                    
+                    if valid_top_30:
+                        st.session_state.matched_products = valid_top_30
+                        st.session_state.step = 2
+                        st.rerun()
+
+with tab2:
+    st.info("💡 如果不需要 AI 匹配，请直接在下方粘贴商品详情页链接。一行一个。")
+    direct_urls = st.text_area("输入商品链接：", placeholder="[https://example.com/product-1](https://example.com/product-1)\n[https://example.com/product-2](https://example.com/product-2)", height=150)
+    
+    if st.button("🚀 直接获取这些商品信息"):
+        if not direct_urls.strip():
+            st.warning("请至少输入一个链接！")
+        else:
+            with st.spinner("正在解析您提供的链接，请稍候..."):
+                fetched_products = fetch_direct_urls(direct_urls)
+                if fetched_products:
+                    st.session_state.matched_products = fetched_products
                     st.session_state.step = 2
                     st.rerun()
+                else:
+                    st.error("未能成功解析任何链接，请确保链接格式正确并以 http 开头。")
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
-    st.info(f"以下是 AI 海选出的 {len(st.session_state.matched_products)} 个商品。勾选下方图片确认：")
+    st.info(f"以下是候选池中的 {len(st.session_state.matched_products)} 个商品。勾选下方图片确认：")
     
     with st.form("selection_form"):
         temp_selected = []
@@ -238,84 +275,73 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
 if st.session_state.step >= 3 and st.session_state.selected_urls:
     st.markdown("### 步骤 3：选择商品卡片模板")
     
-    # 模板选择单选框
-    template_choice = st.radio(
-        "请选择您想要生成的排版样式：", 
-        list(templates.keys()), 
-        horizontal=True
-    )
-    
-    st.markdown("#### ✨ 模板效果预览")
-    # 用于预览的虚拟数据
+    # 模拟渲染用的假数据（占位符）
     dummy_data = {
-        "image_url": "[https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&w=400&q=80](https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&w=400&q=80)",
-        "title": "Vanilla ice cream",
-        "price": "$16.99",
-        "specs": "Vegan &nbsp;•&nbsp; Gluten Free &nbsp;•&nbsp; Organic",
-        "details": "Blending cream, milk, sugar and natural vanilla. A perfect sweet treat.",
+        "image_url": "[https://dummyimage.com/400x400/fadcd9/333333.png&text=Preview](https://dummyimage.com/400x400/fadcd9/333333.png&text=Preview)",
+        "title": "Custom Halloween Decoration",
+        "price": "$28.00",
+        "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm",
         "buy_link": "#",
         "cta_text": "Add To Cart"
     }
     
-    # 获取选中模板的代码和渲染高度
-    selected_tmpl_html = templates[template_choice]["html"]
-    render_height = templates[template_choice]["height"]
+    # 动态渲染两列模板预览
+    tmpl_cols = st.columns(len(templates))
+    for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
+        with col:
+            st.markdown(f"**{tmpl_name}**")
+            st.components.v1.html(tmpl_data["html"].format(**dummy_data), height=tmpl_data["height"] + 20)
+            if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
+                st.session_state.selected_template = tmpl_name
+                st.session_state.step = 4
+                st.rerun()
+
+if st.session_state.step >= 4 and st.session_state.selected_template:
+    st.markdown("### 步骤 4：最终生成结果")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}**")
     
-    # 在左侧显示预览
-    col_prev1, col_prev2 = st.columns([1.5, 2.5])
-    with col_prev1:
-        st.components.v1.html(selected_tmpl_html.format(**dummy_data), height=render_height)
-        
-    st.write("---")
+    selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
+    selected_tmpl_html = templates[st.session_state.selected_template]["html"]
+    render_height = templates[st.session_state.selected_template]["height"] + 20
     
-    # 步骤 4 集成在按钮后
-    if st.button("🚀 开始抓取详情并生成最终代码", type="primary"):
-        st.markdown("### 步骤 4：最终生成结果")
+    my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
+    total = len(selected_items)
+    
+    for i, item in enumerate(selected_items):
+        prod_url = item["url"]
+        prod_title_preview = item["title"]
+        details_data = extract_product_details(prod_url)
         
-        selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
-        
-        my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
-        total = len(selected_items)
-        
-        for i, item in enumerate(selected_items):
-            prod_url = item["url"]
-            prod_title_preview = item["title"]
-            details_data = extract_product_details(prod_url)
+        if details_data:
+            raw_specs = details_data.get("specs", "")
+            if isinstance(raw_specs, list): specs_str = "&nbsp;•&nbsp;".join([str(x) for x in raw_specs])
+            elif isinstance(raw_specs, dict): specs_str = "&nbsp;•&nbsp;".join([f"{k}: {v}" for k, v in raw_specs.items()])
+            else: specs_str = str(raw_specs).replace('\n', '&nbsp;•&nbsp;')
             
-            if details_data:
-                # 规格清洗
-                raw_specs = details_data.get("specs", "")
-                if isinstance(raw_specs, list): specs_str = "&nbsp;•&nbsp;".join([str(x) for x in raw_specs])
-                elif isinstance(raw_specs, dict): specs_str = "&nbsp;•&nbsp;".join([f"{k}: {v}" for k, v in raw_specs.items()])
-                else: specs_str = str(raw_specs).replace('\n', '&nbsp;•&nbsp;')
-                
-                # 注入数据
-                card_html = selected_tmpl_html.format(
-                    image_url=details_data.get("image_url", ""),
-                    title=details_data.get("title", ""),
-                    price=details_data.get("price", ""),
-                    specs=specs_str,
-                    details=details_data.get("details", ""),
-                    buy_link=details_data.get("buy_link", ""),
-                    cta_text=details_data.get("cta_text", "Buy Now")
-                )
-                
-                st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
-                col_left, col_right = st.columns([1, 1], gap="large")
-                
-                with col_left:
-                    st.caption("👁️ 视觉预览")
-                    st.components.v1.html(card_html, height=render_height, scrolling=True)
-                with col_right:
-                    st.caption("💻 对应 HTML 代码")
-                    # 将代码包裹在折叠面板中，保持界面清爽
-                    with st.expander("点击展开 / 复制 HTML 代码"):
-                        st.code(card_html, language='html')
-                    
-                st.write("---") 
-            else:
-                st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
+            card_html = selected_tmpl_html.format(
+                image_url=details_data.get("image_url", ""),
+                title=details_data.get("title", ""),
+                price=details_data.get("price", ""),
+                specs=specs_str,
+                buy_link=details_data.get("buy_link", ""),
+                cta_text=details_data.get("cta_text", "Buy Now")
+            )
             
-            my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
+            st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
+            col_left, col_right = st.columns([1, 1], gap="large")
+            
+            with col_left:
+                st.caption("👁️ 视觉预览")
+                st.components.v1.html(card_html, height=render_height, scrolling=True)
+            with col_right:
+                st.caption("💻 对应 HTML 代码")
+                with st.expander("点击展开 / 复制 HTML 代码"):
+                    st.code(card_html, language='html')
+                
+            st.write("---") 
+        else:
+            st.error(f"❌ '{prod_title_preview}' 数据抓取失败。")
         
-        st.success(f"✅ 成功生成 {total} 个商品卡片！")
+        my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个卡片...")
+    
+    st.success(f"✅ 成功生成 {total} 个商品卡片！")
