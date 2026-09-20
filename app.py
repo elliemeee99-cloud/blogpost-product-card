@@ -20,7 +20,7 @@ st.title("🛍️ 博客商品卡片自动生成器 (GEO响应式版)")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
     api_key = st.secrets["DEEPSEEK_API_KEY"]
-    client = OpenAI(api_key=api_key, base_url="[https://api.deepseek.com](https://api.deepseek.com)")
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 else:
     st.error("❌ 未读取到 API Key，请检查 Settings -> Secrets")
     st.stop()
@@ -56,14 +56,14 @@ templates = {
     .g-seo-t1-content {{ width: 100%; padding: 15px; }}
 }}
 </style>
-<article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t1">
+<article itemscope itemtype="https://schema.org/Product" class="g-seo-t1">
     <div class="g-seo-t1-img">
         <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
     </div>
     <div class="g-seo-t1-content">
         <div>
             <h3 itemprop="name" class="g-seo-t1-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t1-price-wrap">
+            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t1-price-wrap">
                 <span class="g-seo-t1-price">🏷️ <span itemprop="price">{price}</span></span>
                 <meta itemprop="url" content="{buy_link}">
             </div>
@@ -96,13 +96,13 @@ templates = {
     .g-seo-t2-btn {{ padding: 10px 16px; font-size: 14px; }}
 }}
 </style>
-<article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t2">
+<article itemscope itemtype="https://schema.org/Product" class="g-seo-t2">
     <div class="g-seo-t2-img">
         <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
     <h3 itemprop="name" class="g-seo-t2-title">{title}</h3>
     <div itemprop="description" class="g-seo-t2-specs">{specs}</div>
-    <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t2-bot">
+    <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t2-bot">
         <span itemprop="price" class="g-seo-t2-price">{price}</span>
         <meta itemprop="url" content="{buy_link}">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t2-btn">{cta_text}</a>
@@ -143,12 +143,12 @@ templates = {
 {json_ld}
 """,
         "item_html": """
-        <article itemscope itemtype="[https://schema.org/Product](https://schema.org/Product)" class="g-seo-t3-item">
+        <article itemscope itemtype="https://schema.org/Product" class="g-seo-t3-item">
             <div class="g-seo-t3-img">
                 <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
             </div>
             <h3 itemprop="name" class="g-seo-t3-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="[https://schema.org/Offer](https://schema.org/Offer)" class="g-seo-t3-bot">
+            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t3-bot">
                 <span itemprop="price" class="g-seo-t3-price">{price}</span>
                 <meta itemprop="url" content="{buy_link}">
                 <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t3-btn">{cta_text}</a>
@@ -212,6 +212,17 @@ def fetch_direct_urls(url_list_text):
             products.append({"title": title, "url": clean_url, "thumbnail": img_url})
     return products
 
+def clean_json_response(content):
+    """强力剥离大模型返回的各种非法 Markdown 包裹"""
+    content = content.strip()
+    if content.startswith("```"):
+        # 寻找第一个换行符之后的内容，直到倒数第一个 ```
+        start_idx = content.find('\n') + 1
+        end_idx = content.rfind('```')
+        if start_idx > 0 and end_idx > start_idx:
+            content = content[start_idx:end_idx].strip()
+    return content
+
 def ai_match_top_30(blog_text, product_list):
     prompt = f"""
     You are an expert e-commerce recommender.
@@ -228,9 +239,7 @@ def ai_match_top_30(blog_text, product_list):
             response_format={"type": "json_object"} if "json" in prompt.lower() else None,
             max_tokens=4000
         )
-        result_text = response.choices[0].message.content
-        if result_text.startswith("```json"): 
-            result_text = result_text.replace("```json\n", "").replace("```", "")
+        result_text = clean_json_response(response.choices[0].message.content)
         return json.loads(result_text)
     except:
         return product_list[:30]
@@ -264,23 +273,26 @@ def extract_product_details(product_url):
             response_format={"type": "json_object"},
             max_tokens=1500
         )
-        result = json.loads(response.choices[0].message.content)
+        result_text = clean_json_response(response.choices[0].message.content)
+        result = json.loads(result_text)
         result["image_url"] = main_image
         result["buy_link"] = product_url
         return result
-    except:
+    except Exception as e:
+        # 如果报错，直接打印在终端以便排查
+        st.toast(f"提取失败 [{product_url}]: {str(e)}")
         return None
 
 def generate_single_json_ld(title, image_url, price, specs, buy_link):
     price_num = re.sub(r'[^\d.,]', '', price)
     if not price_num: price_num = "0.00"
     ld = {
-        "@context": "https://schema.org/",
+        "@context": "[https://schema.org/](https://schema.org/)",
         "@type": "Product",
         "name": title,
         "image": image_url,
         "description": specs[:150],
-        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "https://schema.org/InStock"}
+        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "[https://schema.org/InStock](https://schema.org/InStock)"}
     }
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
@@ -296,7 +308,7 @@ def generate_carousel_json_ld(products_data):
                 "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": data.get("buy_link", "")}
             }
         })
-    ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
+    ld = {"@context": "[https://schema.org/](https://schema.org/)", "@type": "ItemList", "itemListElement": items}
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
 # ================= 界面工作流 =================
@@ -340,7 +352,7 @@ with tab1:
 
 with tab2:
     st.info("💡 如果不需要给 Blog 找对应的商品，或者 AI 找不到商品时，请直接在下方粘贴商品详情页链接。一行一个。")
-    direct_urls = st.text_area("输入商品链接：", placeholder="https://example.com/product-1\nhttps://example.com/product-2", height=150)
+    direct_urls = st.text_area("输入商品链接：", placeholder="[https://example.com/product-1](https://example.com/product-1)\n[https://example.com/product-2](https://example.com/product-2)", height=150)
     
     if st.button("🚀 直接获取这些商品信息"):
         if not direct_urls.strip():
@@ -367,7 +379,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             cols = st.columns(cols_per_row)
             for col, item in zip(cols, row_items):
                 with col:
-                    st.image(item["thumbnail"], use_container_width=True)
+                    st.image(item["thumbnail"])
                     if st.checkbox("选择", key=f"chk_{item['url']}", help=item['title']):
                         temp_selected.append(item["url"])
             st.write("") 
@@ -403,12 +415,15 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
             else:
                 preview_html = tmpl_data["html"].format(**dummy_data)
             
+            # 使用全新的 st.html，并在外部包裹固定高度与滚动容器
             preview_wrapper = f"""
-            <div style="transform: scale(0.85); transform-origin: top left; width: 117%;">
-                {preview_html}
+            <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px; background: #fff;">
+                <div style="transform: scale(0.85); transform-origin: top left; width: 117%;">
+                    {preview_html}
+                </div>
             </div>
             """
-            st.components.v1.html(preview_wrapper, height=350, scrolling=True)
+            st.html(preview_wrapper)
             
             if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
                 st.session_state.selected_template = tmpl_name
@@ -458,7 +473,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                 col_left, col_right = st.columns([1, 1], gap="large")
                 with col_left:
                     st.caption("👁️ 视觉预览 (响应式)")
-                    st.components.v1.html(card_html, height=450, scrolling=True)
+                    # 使用 st.html 替代旧版的 st.components.v1.html
+                    st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
                 with col_right:
                     st.caption("💻 对应 HTML 代码")
                     with st.expander("点击展开 / 复制 HTML 代码"):
@@ -484,7 +500,7 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
         col_left, col_right = st.columns([1, 1], gap="large")
         with col_left:
             st.caption("👁️ 视觉预览 (响应式，可横向滑动)")
-            st.components.v1.html(final_carousel_html, height=450, scrolling=True)
+            st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
         with col_right:
             st.caption("💻 对应完整 HTML 代码")
             with st.expander("点击展开 / 复制完整轮播代码"):
