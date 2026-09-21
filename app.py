@@ -77,6 +77,44 @@ templates = {
 {json_ld}
 """
     },
+    "模板 4：左右结构 (纯净无规格)": {
+        "type": "single",
+        "html": """
+<style>
+.g-seo-t4 {{ display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 200px; }}
+.g-seo-t4-img {{ width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box; }}
+.g-seo-t4-img img {{ width: 100%; height: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; }}
+.g-seo-t4-content {{ width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }}
+.g-seo-t4-title {{ margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
+.g-seo-t4-price-wrap {{ margin-bottom: 15px; }}
+.g-seo-t4-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }}
+.g-seo-t4-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; margin-top: auto; }}
+.g-seo-t4-btn:hover {{ background-color: #43D8C9; }}
+/* 移动端自适应 */
+@media (max-width: 640px) {{
+    .g-seo-t4 {{ flex-direction: column; }}
+    .g-seo-t4-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
+    .g-seo-t4-content {{ width: 100%; padding: 15px; min-height: 180px; }}
+}}
+</style>
+<article itemscope itemtype="https://schema.org/Product" class="g-seo-t4">
+    <div class="g-seo-t4-img">
+        <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
+    </div>
+    <div class="g-seo-t4-content">
+        <div>
+            <h3 itemprop="name" class="g-seo-t4-title">{title}</h3>
+            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t4-price-wrap">
+                <span class="g-seo-t4-price">🏷️ <span itemprop="price">{price}</span></span>
+                <meta itemprop="url" content="{buy_link}">
+            </div>
+        </div>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t4-btn">{cta_text}</a>
+    </div>
+</article>
+{json_ld}
+"""
+    },
     "模板 2：上下结构 (圆润多巴胺)": {
         "type": "single",
         "html": """
@@ -213,10 +251,8 @@ def fetch_direct_urls(url_list_text):
     return products
 
 def clean_json_response(content):
-    """强力剥离大模型返回的各种非法 Markdown 包裹"""
     content = content.strip()
     if content.startswith("```"):
-        # 寻找第一个换行符之后的内容，直到倒数第一个 ```
         start_idx = content.find('\n') + 1
         end_idx = content.rfind('```')
         if start_idx > 0 and end_idx > start_idx:
@@ -279,7 +315,6 @@ def extract_product_details(product_url):
         result["buy_link"] = product_url
         return result
     except Exception as e:
-        # 如果报错，直接打印在终端以便排查
         st.toast(f"提取失败 [{product_url}]: {str(e)}")
         return None
 
@@ -287,12 +322,12 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link):
     price_num = re.sub(r'[^\d.,]', '', price)
     if not price_num: price_num = "0.00"
     ld = {
-        "@context": "[https://schema.org/](https://schema.org/)",
+        "@context": "https://schema.org/",
         "@type": "Product",
         "name": title,
         "image": image_url,
         "description": specs[:150],
-        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "[https://schema.org/InStock](https://schema.org/InStock)"}
+        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "https://schema.org/InStock"}
     }
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
@@ -308,7 +343,7 @@ def generate_carousel_json_ld(products_data):
                 "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": data.get("buy_link", "")}
             }
         })
-    ld = {"@context": "[https://schema.org/](https://schema.org/)", "@type": "ItemList", "itemListElement": items}
+    ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
 # ================= 界面工作流 =================
@@ -352,7 +387,7 @@ with tab1:
 
 with tab2:
     st.info("💡 如果不需要给 Blog 找对应的商品，或者 AI 找不到商品时，请直接在下方粘贴商品详情页链接。一行一个。")
-    direct_urls = st.text_area("输入商品链接：", placeholder="[https://example.com/product-1](https://example.com/product-1)\n[https://example.com/product-2](https://example.com/product-2)", height=150)
+    direct_urls = st.text_area("输入商品链接：", placeholder="https://example.com/product-1\nhttps://example.com/product-2", height=150)
     
     if st.button("🚀 直接获取这些商品信息"):
         if not direct_urls.strip():
@@ -413,12 +448,13 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
                 dummy_item = tmpl_data["item_html"].format(**dummy_data)
                 preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3).format(json_ld="")
             else:
+                # 即使是模板4（没有specs参数的占位符），强行format多余的字典参数也不会报错，被完美兼容
                 preview_html = tmpl_data["html"].format(**dummy_data)
             
-            # 使用全新的 st.html，并在外部包裹固定高度与滚动容器
+            # 为了放下 4 个模板，将缩放比例从 0.85 调整到了 0.75
             preview_wrapper = f"""
             <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px; background: #fff;">
-                <div style="transform: scale(0.85); transform-origin: top left; width: 117%;">
+                <div style="transform: scale(0.75); transform-origin: top left; width: 133%;">
                     {preview_html}
                 </div>
             </div>
@@ -457,6 +493,7 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             all_extracted_data.append(details_data)
             
             if tmpl_config["type"] == "single":
+                # 即使模板在视觉上不展示规格，底层 JSON-LD 依然包含 specs_plain 助力 SEO 搜索词命中
                 ld_script = generate_single_json_ld(
                     details_data.get("title", ""), details_data.get("image_url", ""), 
                     details_data.get("price", ""), details_data.get("specs_plain", ""), details_data.get("buy_link", "")
@@ -473,7 +510,6 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                 col_left, col_right = st.columns([1, 1], gap="large")
                 with col_left:
                     st.caption("👁️ 视觉预览 (响应式)")
-                    # 使用 st.html 替代旧版的 st.components.v1.html
                     st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
                 with col_right:
                     st.caption("💻 对应 HTML 代码")
