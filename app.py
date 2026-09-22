@@ -34,7 +34,6 @@ if "selected_template" not in st.session_state: st.session_state.selected_templa
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 # ================= HTML 响应式模板库 =================
-# 核心更改：完全去除了 HTML 中混入的 schema 属性 (itemprop等)，防止视觉文字导致结构化数据错误
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
@@ -286,13 +285,15 @@ def extract_product_details(product_url):
     main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
+    # 核心修复：加强对主价格和运费的区别，并要求提取退换货天数
     prompt = f"""
     Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
     Extract into JSON:
     1. "title": The product name.
-    2. "price": The price (e.g., "28,00 €").
-    3. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). ABSOLUTELY DO NOT include long paragraphs, shipping details, warnings, or care notes. Keep it extremely brief. If none, output "Standard".
-    4. "cta_text": Generate a "Buy Now" button text in original language.
+    2. "price": The MAIN product price (e.g., "20,00 €"). CRITICAL: DO NOT confuse this with shipping fees (e.g., "5,0€" for Expédition Standard). Look for the largest price near the top of the page.
+    3. "return_days": Look for the return policy (e.g., "Retour de 99 jours"). Extract ONLY the numeric days (e.g., 99). If not explicitly stated, default to 30.
+    4. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). Keep it extremely brief. If none, output "Standard".
+    5. "cta_text": Generate a "Buy Now" button text in original language.
     Page Text: {text_content}
     """
     try:
@@ -313,19 +314,26 @@ def extract_product_details(product_url):
 
 # 核心清洗：修复 JSON-LD 报错
 def format_price_for_schema(price_str):
-    """将包含逗号和符号的欧洲价格清洗为合法的 JSON-LD 浮点数字符串"""
     if not price_str: return "0.00"
-    p = str(price_str).replace(',', '.') # 将欧洲的小数逗号转为句号
-    p = re.sub(r'[^\d.]', '', p)         # 移除非数字和小数点的任何符号
+    p = str(price_str).replace(',', '.') 
+    p = re.sub(r'[^\d.]', '', p)         
     parts = p.split('.')
     if len(parts) > 2:
         p = "".join(parts[:-1]) + "." + parts[-1]
     return p if p else "0.00"
 
-def generate_single_json_ld(title, image_url, price, specs, buy_link):
+def get_return_days(val):
+    """安全地解析退换货天数"""
+    try:
+        nums = re.findall(r'\d+', str(val))
+        return int(nums[0]) if nums else 30
+    except:
+        return 30
+
+def generate_single_json_ld(title, image_url, price, specs, buy_link, return_days):
     price_num = format_price_for_schema(price)
-    # 截断标题，解决 Google 报 Name 字段过长的警告
     title_ld = title[:140] + "..." if len(title) > 140 else title
+    days = get_return_days(return_days)
     
     ld = {
         "@context": "https://schema.org/",
@@ -335,7 +343,7 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link):
         "description": specs[:150] if specs else "Standard",
         "brand": {
             "@type": "Brand",
-            "name": "Callie" # 补充全局品牌标识符解决 Google 警告
+            "name": "Callie"
         },
         "offers": {
             "@type": "Offer",
@@ -343,15 +351,15 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link):
             "priceCurrency": "USD",
             "url": buy_link,
             "availability": "https://schema.org/InStock",
-            "hasMerchantReturnPolicy": { # 增加商家政策合规
+            "hasMerchantReturnPolicy": { 
                 "@type": "MerchantReturnPolicy",
                 "applicableCountry": "US",
                 "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-                "merchantReturnDays": 30,
+                "merchantReturnDays": days, # 动态抓取的退换货天数
                 "returnMethod": "https://schema.org/ReturnByMail",
                 "returnFees": "https://schema.org/FreeReturn"
             },
-            "shippingDetails": { # 增加运费信息合规
+            "shippingDetails": { 
                 "@type": "OfferShippingDetails",
                 "shippingRate": {
                     "@type": "MonetaryAmount",
@@ -374,6 +382,7 @@ def generate_carousel_json_ld(products_data):
         price_num = format_price_for_schema(data.get("price", ""))
         title = data.get("title", "")
         title_ld = title[:140] + "..." if len(title) > 140 else title
+        days = get_return_days(data.get("return_days", 30))
         
         items.append({
             "@type": "ListItem", 
@@ -393,7 +402,7 @@ def generate_carousel_json_ld(products_data):
                         "@type": "MerchantReturnPolicy",
                         "applicableCountry": "US",
                         "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-                        "merchantReturnDays": 30,
+                        "merchantReturnDays": days, # 动态抓取的退换货天数
                         "returnMethod": "https://schema.org/ReturnByMail",
                         "returnFees": "https://schema.org/FreeReturn"
                     },
@@ -532,7 +541,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4 and st.session_state.selected_template:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已彻底解决 Schema 数据报错)")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已附带 GEO/SEO 响应式支持)")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
     tmpl_config = templates[st.session_state.selected_template]
@@ -559,7 +568,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             if tmpl_config["type"] == "single":
                 ld_script = generate_single_json_ld(
                     details_data.get("title", ""), details_data.get("image_url", ""), 
-                    details_data.get("price", ""), details_data.get("specs_plain", ""), details_data.get("buy_link", "")
+                    details_data.get("price", ""), details_data.get("specs_plain", ""), 
+                    details_data.get("buy_link", ""), details_data.get("return_days", 30)
                 )
                 
                 card_html = tmpl_config["html"].format(
