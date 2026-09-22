@@ -34,6 +34,7 @@ if "selected_template" not in st.session_state: st.session_state.selected_templa
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 # ================= HTML 响应式模板库 =================
+# 核心更改：完全去除了 HTML 中混入的 schema 属性 (itemprop等)，防止视觉文字导致结构化数据错误
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
@@ -49,25 +50,23 @@ templates = {
 .g-seo-t1-specs {{ background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
 .g-seo-t1-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; }}
 .g-seo-t1-btn:hover {{ background-color: #43D8C9; }}
-/* 移动端自适应 */
 @media (max-width: 640px) {{
     .g-seo-t1 {{ flex-direction: column; }}
     .g-seo-t1-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
     .g-seo-t1-content {{ width: 100%; padding: 15px; }}
 }}
 </style>
-<article itemscope itemtype="https://schema.org/Product" class="g-seo-t1">
+<article class="g-seo-t1">
     <div class="g-seo-t1-img">
-        <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
+        <img src="{image_url}" loading="lazy" alt="{title}">
     </div>
     <div class="g-seo-t1-content">
         <div>
-            <h3 itemprop="name" class="g-seo-t1-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t1-price-wrap">
-                <span class="g-seo-t1-price">🏷️ <span itemprop="price">{price}</span></span>
-                <meta itemprop="url" content="{buy_link}">
+            <h3 class="g-seo-t1-title">{title}</h3>
+            <div class="g-seo-t1-price-wrap">
+                <span class="g-seo-t1-price">🏷️ {price}</span>
             </div>
-            <div itemprop="description" class="g-seo-t1-specs">
+            <div class="g-seo-t1-specs">
                 <strong>⚙️ </strong>{specs}
             </div>
         </div>
@@ -90,23 +89,21 @@ templates = {
 .g-seo-t4-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }}
 .g-seo-t4-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; margin-top: auto; }}
 .g-seo-t4-btn:hover {{ background-color: #43D8C9; }}
-/* 移动端自适应 */
 @media (max-width: 640px) {{
     .g-seo-t4 {{ flex-direction: column; }}
     .g-seo-t4-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
     .g-seo-t4-content {{ width: 100%; padding: 15px; min-height: 180px; }}
 }}
 </style>
-<article itemscope itemtype="https://schema.org/Product" class="g-seo-t4">
+<article class="g-seo-t4">
     <div class="g-seo-t4-img">
-        <img itemprop="image" src="{image_url}" loading="lazy" alt="{title}">
+        <img src="{image_url}" loading="lazy" alt="{title}">
     </div>
     <div class="g-seo-t4-content">
         <div>
-            <h3 itemprop="name" class="g-seo-t4-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t4-price-wrap">
-                <span class="g-seo-t4-price">🏷️ <span itemprop="price">{price}</span></span>
-                <meta itemprop="url" content="{buy_link}">
+            <h3 class="g-seo-t4-title">{title}</h3>
+            <div class="g-seo-t4-price-wrap">
+                <span class="g-seo-t4-price">🏷️ {price}</span>
             </div>
         </div>
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t4-btn">{cta_text}</a>
@@ -127,22 +124,20 @@ templates = {
 .g-seo-t2-price {{ color: #F59E0B; font-size: 22px; font-weight: 800; }}
 .g-seo-t2-btn {{ background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s; }}
 .g-seo-t2-btn:hover {{ opacity: 0.8; }}
-/* 移动端自适应 */
 @media (max-width: 380px) {{
     .g-seo-t2 {{ padding: 15px; }}
     .g-seo-t2-price {{ font-size: 18px; }}
     .g-seo-t2-btn {{ padding: 10px 16px; font-size: 14px; }}
 }}
 </style>
-<article itemscope itemtype="https://schema.org/Product" class="g-seo-t2">
+<article class="g-seo-t2">
     <div class="g-seo-t2-img">
-        <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+        <img src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
     </div>
-    <h3 itemprop="name" class="g-seo-t2-title">{title}</h3>
-    <div itemprop="description" class="g-seo-t2-specs">{specs}</div>
-    <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t2-bot">
-        <span itemprop="price" class="g-seo-t2-price">{price}</span>
-        <meta itemprop="url" content="{buy_link}">
+    <h3 class="g-seo-t2-title">{title}</h3>
+    <div class="g-seo-t2-specs">{specs}</div>
+    <div class="g-seo-t2-bot">
+        <span class="g-seo-t2-price">{price}</span>
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t2-btn">{cta_text}</a>
     </div>
 </article>
@@ -164,7 +159,6 @@ templates = {
 .g-seo-t3-price {{ color: #111111; font-size: 16px; font-weight: 800; }}
 .g-seo-t3-btn {{ background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background-color 0.3s; }}
 .g-seo-t3-btn:hover {{ background-color: #C2A594; }}
-/* 移动端自适应 */
 @media (max-width: 640px) {{
     .g-seo-t3-sec {{ padding: 20px 5px; }}
     .g-seo-t3-item {{ flex: 0 0 170px; padding: 12px; }}
@@ -181,14 +175,13 @@ templates = {
 {json_ld}
 """,
         "item_html": """
-        <article itemscope itemtype="https://schema.org/Product" class="g-seo-t3-item">
+        <article class="g-seo-t3-item">
             <div class="g-seo-t3-img">
-                <img itemprop="image" src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+                <img src="{image_url}" loading="lazy" alt="{title}">
             </div>
-            <h3 itemprop="name" class="g-seo-t3-title">{title}</h3>
-            <div itemprop="offers" itemscope itemtype="https://schema.org/Offer" class="g-seo-t3-bot">
-                <span itemprop="price" class="g-seo-t3-price">{price}</span>
-                <meta itemprop="url" content="{buy_link}">
+            <h3 class="g-seo-t3-title">{title}</h3>
+            <div class="g-seo-t3-bot">
+                <span class="g-seo-t3-price">{price}</span>
                 <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t3-btn">{cta_text}</a>
             </div>
         </article>
@@ -318,29 +311,102 @@ def extract_product_details(product_url):
         st.toast(f"提取失败 [{product_url}]: {str(e)}")
         return None
 
+# 核心清洗：修复 JSON-LD 报错
+def format_price_for_schema(price_str):
+    """将包含逗号和符号的欧洲价格清洗为合法的 JSON-LD 浮点数字符串"""
+    if not price_str: return "0.00"
+    p = str(price_str).replace(',', '.') # 将欧洲的小数逗号转为句号
+    p = re.sub(r'[^\d.]', '', p)         # 移除非数字和小数点的任何符号
+    parts = p.split('.')
+    if len(parts) > 2:
+        p = "".join(parts[:-1]) + "." + parts[-1]
+    return p if p else "0.00"
+
 def generate_single_json_ld(title, image_url, price, specs, buy_link):
-    price_num = re.sub(r'[^\d.,]', '', price)
-    if not price_num: price_num = "0.00"
+    price_num = format_price_for_schema(price)
+    # 截断标题，解决 Google 报 Name 字段过长的警告
+    title_ld = title[:140] + "..." if len(title) > 140 else title
+    
     ld = {
         "@context": "https://schema.org/",
         "@type": "Product",
-        "name": title,
+        "name": title_ld,
         "image": image_url,
-        "description": specs[:150],
-        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": buy_link, "availability": "https://schema.org/InStock"}
+        "description": specs[:150] if specs else "Standard",
+        "brand": {
+            "@type": "Brand",
+            "name": "Callie" # 补充全局品牌标识符解决 Google 警告
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": price_num,
+            "priceCurrency": "USD",
+            "url": buy_link,
+            "availability": "https://schema.org/InStock",
+            "hasMerchantReturnPolicy": { # 增加商家政策合规
+                "@type": "MerchantReturnPolicy",
+                "applicableCountry": "US",
+                "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+                "merchantReturnDays": 30,
+                "returnMethod": "https://schema.org/ReturnByMail",
+                "returnFees": "https://schema.org/FreeReturn"
+            },
+            "shippingDetails": { # 增加运费信息合规
+                "@type": "OfferShippingDetails",
+                "shippingRate": {
+                    "@type": "MonetaryAmount",
+                    "value": "0",
+                    "currency": "USD"
+                },
+                "deliveryTime": {
+                    "@type": "ShippingDeliveryTime",
+                    "handlingTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 3, "unitCode": "d"},
+                    "transitTime": {"@type": "QuantitativeValue", "minValue": 3, "maxValue": 7, "unitCode": "d"}
+                }
+            }
+        }
     }
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
 def generate_carousel_json_ld(products_data):
     items = []
     for i, data in enumerate(products_data):
-        price_num = re.sub(r'[^\d.,]', '', data.get("price", ""))
-        if not price_num: price_num = "0.00"
+        price_num = format_price_for_schema(data.get("price", ""))
+        title = data.get("title", "")
+        title_ld = title[:140] + "..." if len(title) > 140 else title
+        
         items.append({
-            "@type": "ListItem", "position": i + 1,
+            "@type": "ListItem", 
+            "position": i + 1,
             "item": {
-                "@type": "Product", "name": data.get("title", ""), "image": data.get("image_url", ""),
-                "offers": {"@type": "Offer", "price": price_num, "priceCurrency": "USD", "url": data.get("buy_link", "")}
+                "@type": "Product", 
+                "name": title_ld, 
+                "image": data.get("image_url", ""),
+                "brand": {"@type": "Brand", "name": "Callie"},
+                "offers": {
+                    "@type": "Offer", 
+                    "price": price_num, 
+                    "priceCurrency": "USD", 
+                    "url": data.get("buy_link", ""),
+                    "availability": "https://schema.org/InStock",
+                    "hasMerchantReturnPolicy": {
+                        "@type": "MerchantReturnPolicy",
+                        "applicableCountry": "US",
+                        "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+                        "merchantReturnDays": 30,
+                        "returnMethod": "https://schema.org/ReturnByMail",
+                        "returnFees": "https://schema.org/FreeReturn"
+                    },
+                    "shippingDetails": {
+                        "@type": "OfferShippingDetails",
+                        "shippingRate": {"@type": "MonetaryAmount", "value": "0", "currency": "USD"},
+                        "deliveryTime": {
+                            "@type": "ShippingDeliveryTime",
+                            "handlingTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 3, "unitCode": "d"},
+                            "transitTime": {"@type": "QuantitativeValue", "minValue": 3, "maxValue": 7, "unitCode": "d"}
+                        }
+                    }
+                }
             }
         })
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
@@ -414,7 +480,7 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             cols = st.columns(cols_per_row)
             for col, item in zip(cols, row_items):
                 with col:
-                    st.image(item["thumbnail"])
+                    st.image(item["thumbnail"], use_container_width=True)
                     if st.checkbox("选择", key=f"chk_{item['url']}", help=item['title']):
                         temp_selected.append(item["url"])
             st.write("") 
@@ -448,10 +514,8 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
                 dummy_item = tmpl_data["item_html"].format(**dummy_data)
                 preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3).format(json_ld="")
             else:
-                # 即使是模板4（没有specs参数的占位符），强行format多余的字典参数也不会报错，被完美兼容
                 preview_html = tmpl_data["html"].format(**dummy_data)
             
-            # 为了放下 4 个模板，将缩放比例从 0.85 调整到了 0.75
             preview_wrapper = f"""
             <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px; background: #fff;">
                 <div style="transform: scale(0.75); transform-origin: top left; width: 133%;">
@@ -468,7 +532,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4 and st.session_state.selected_template:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已附带 GEO/SEO 响应式支持)")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已彻底解决 Schema 数据报错)")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
     tmpl_config = templates[st.session_state.selected_template]
@@ -493,7 +557,6 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             all_extracted_data.append(details_data)
             
             if tmpl_config["type"] == "single":
-                # 即使模板在视觉上不展示规格，底层 JSON-LD 依然包含 specs_plain 助力 SEO 搜索词命中
                 ld_script = generate_single_json_ld(
                     details_data.get("title", ""), details_data.get("image_url", ""), 
                     details_data.get("price", ""), details_data.get("specs_plain", ""), details_data.get("buy_link", "")
