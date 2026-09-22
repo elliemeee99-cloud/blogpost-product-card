@@ -285,15 +285,17 @@ def extract_product_details(product_url):
     main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 核心修复：加强对主价格和运费的区别，并要求提取退换货天数
+    # 核心修复：加强防幻觉指令，严禁瞎编
     prompt = f"""
     Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
+    CRITICAL RULES: DO NOT HALLUCINATE OR GUESS. ONLY extract what is explicitly on the page.
+    
     Extract into JSON:
-    1. "title": The product name.
-    2. "price": The MAIN product price (e.g., "20,00 €"). CRITICAL: DO NOT confuse this with shipping fees (e.g., "5,0€" for Expédition Standard). Look for the largest price near the top of the page.
-    3. "return_days": Look for the return policy (e.g., "Retour de 99 jours"). Extract ONLY the numeric days (e.g., 99). If not explicitly stated, default to 30.
-    4. "specs": Extract ONLY the top 1-3 most critical physical specifications (like Material, Size). Keep it extremely brief. If none, output "Standard".
-    5. "cta_text": Generate a "Buy Now" button text in original language.
+    1. "title": The EXACT product name.
+    2. "price": The MAIN product price exactly as written (e.g., "20,00 €"). CRITICAL: DO NOT extract shipping fees (like "Expédition Standard") as the price.
+    3. "return_days": Look for the exact return window (e.g., "Retour de 99 jours" -> 99). If not explicitly found, output 30.
+    4. "specs": Extract ONLY the top 1-3 physical specifications (like Material, Size). Very brief. If none, output "Standard".
+    5. "cta_text": Generate a "Buy Now" button text in the original language.
     Page Text: {text_content}
     """
     try:
@@ -312,7 +314,36 @@ def extract_product_details(product_url):
         st.toast(f"提取失败 [{product_url}]: {str(e)}")
         return None
 
-# 核心清洗：修复 JSON-LD 报错
+# ================= 核心清洗与智能货币检测 (终极修正版) =================
+
+def detect_currency_and_country(url, price_str=""):
+    """
+    双轨制精准匹配：
+    1. 优先从商品所在的 URL 域名判断国家和货币（最精准，防 AI 丢失符号）。
+    2. URL 无特征时，再通过价格字符串中的货币符号作为保底兜底。
+    """
+    url_lower = str(url).lower()
+    
+    # 1. 域名直判 (绝对精准)
+    if 'fr.' in url_lower or '.fr/' in url_lower: return 'EUR', 'FR'
+    if 'de.' in url_lower or '.de/' in url_lower: return 'EUR', 'DE'
+    if 'es.' in url_lower or '.es/' in url_lower: return 'EUR', 'ES'
+    if 'it.' in url_lower or '.it/' in url_lower: return 'EUR', 'IT'
+    if 'uk.' in url_lower or '.co.uk/' in url_lower: return 'GBP', 'GB'
+    if 'ca.' in url_lower or '.ca/' in url_lower: return 'CAD', 'CA'
+    if 'au.' in url_lower or '.com.au/' in url_lower: return 'AUD', 'AU'
+    if 'jp.' in url_lower or '.jp/' in url_lower: return 'JPY', 'JP'
+    
+    # 2. 符号保底
+    p = str(price_str).upper()
+    if '€' in p or 'EUR' in p: return 'EUR', 'FR' # 退到默认的欧洲区
+    if '£' in p or 'GBP' in p: return 'GBP', 'GB'
+    if 'A$' in p or 'AUD' in p: return 'AUD', 'AU'
+    if 'C$' in p or 'CAD' in p: return 'CAD', 'CA'
+    if '¥' in p or 'CNY' in p or 'RMB' in p: return 'CNY', 'CN'
+    
+    return 'USD', 'US' # 全局终极保底
+
 def format_price_for_schema(price_str):
     if not price_str: return "0.00"
     p = str(price_str).replace(',', '.') 
@@ -323,7 +354,6 @@ def format_price_for_schema(price_str):
     return p if p else "0.00"
 
 def get_return_days(val):
-    """安全地解析退换货天数"""
     try:
         nums = re.findall(r'\d+', str(val))
         return int(nums[0]) if nums else 30
@@ -332,6 +362,8 @@ def get_return_days(val):
 
 def generate_single_json_ld(title, image_url, price, specs, buy_link, return_days):
     price_num = format_price_for_schema(price)
+    # 将商品链接传入检测器，确保100%命中正确的国家和货币
+    currency, country_code = detect_currency_and_country(buy_link, price)
     title_ld = title[:140] + "..." if len(title) > 140 else title
     days = get_return_days(return_days)
     
@@ -348,14 +380,14 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
         "offers": {
             "@type": "Offer",
             "price": price_num,
-            "priceCurrency": "USD",
+            "priceCurrency": currency, # 完美注入货币
             "url": buy_link,
             "availability": "https://schema.org/InStock",
             "hasMerchantReturnPolicy": { 
                 "@type": "MerchantReturnPolicy",
-                "applicableCountry": "US",
+                "applicableCountry": country_code, # 完美注入国家
                 "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-                "merchantReturnDays": days, # 动态抓取的退换货天数
+                "merchantReturnDays": days,
                 "returnMethod": "https://schema.org/ReturnByMail",
                 "returnFees": "https://schema.org/FreeReturn"
             },
@@ -364,7 +396,7 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
                 "shippingRate": {
                     "@type": "MonetaryAmount",
                     "value": "0",
-                    "currency": "USD"
+                    "currency": currency # 同步货币
                 },
                 "deliveryTime": {
                     "@type": "ShippingDeliveryTime",
@@ -379,7 +411,12 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
 def generate_carousel_json_ld(products_data):
     items = []
     for i, data in enumerate(products_data):
-        price_num = format_price_for_schema(data.get("price", ""))
+        buy_link = data.get("buy_link", "")
+        price_str = data.get("price", "")
+        price_num = format_price_for_schema(price_str)
+        # 同样，在轮播图中也依靠 URL 精准嗅探国家货币
+        currency, country_code = detect_currency_and_country(buy_link, price_str)
+        
         title = data.get("title", "")
         title_ld = title[:140] + "..." if len(title) > 140 else title
         days = get_return_days(data.get("return_days", 30))
@@ -395,20 +432,20 @@ def generate_carousel_json_ld(products_data):
                 "offers": {
                     "@type": "Offer", 
                     "price": price_num, 
-                    "priceCurrency": "USD", 
-                    "url": data.get("buy_link", ""),
+                    "priceCurrency": currency,
+                    "url": buy_link,
                     "availability": "https://schema.org/InStock",
                     "hasMerchantReturnPolicy": {
                         "@type": "MerchantReturnPolicy",
-                        "applicableCountry": "US",
+                        "applicableCountry": country_code,
                         "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-                        "merchantReturnDays": days, # 动态抓取的退换货天数
+                        "merchantReturnDays": days,
                         "returnMethod": "https://schema.org/ReturnByMail",
                         "returnFees": "https://schema.org/FreeReturn"
                     },
                     "shippingDetails": {
                         "@type": "OfferShippingDetails",
-                        "shippingRate": {"@type": "MonetaryAmount", "value": "0", "currency": "USD"},
+                        "shippingRate": {"@type": "MonetaryAmount", "value": "0", "currency": currency},
                         "deliveryTime": {
                             "@type": "ShippingDeliveryTime",
                             "handlingTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 3, "unitCode": "d"},
@@ -507,9 +544,9 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
     dummy_data = {
         "image_url": dummy_image,
         "title": "Custom Halloween Decoration",
-        "price": "$28.00",
+        "price": "28.00 €",
         "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm",
-        "buy_link": "#",
+        "buy_link": "https://fr.callie.com/example-product", # 提供带 fr 的假链接，方便演示
         "cta_text": "Add To Cart",
         "json_ld": ""
     }
@@ -541,7 +578,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4 and st.session_state.selected_template:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已附带 GEO/SEO 响应式支持)")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (国家代码与货币已完美映射)")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
     tmpl_config = templates[st.session_state.selected_template]
