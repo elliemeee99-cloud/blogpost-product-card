@@ -116,7 +116,8 @@ templates = {
         "html": """
 <style>
 .g-seo-t2 {{ background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto; }}
-.g-seo-t2-img {{ width: 100%; aspect-ratio: 1/1; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t2-img {{ width: 100%; height: 260px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t2-img img {{ width: 100%; height: 100%; max-height: 260px; object-fit: contain; }}
 .g-seo-t2-title {{ margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
 .g-seo-t2-specs {{ color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 50px; }}
 .g-seo-t2-bot {{ display: flex; justify-content: space-between; align-items: center; }}
@@ -131,7 +132,7 @@ templates = {
 </style>
 <article class="g-seo-t2">
     <div class="g-seo-t2-img">
-        <img src="{image_url}" loading="lazy" style="width: 100%; height: 100%; object-fit: contain;" alt="{title}">
+        <img src="{image_url}" loading="lazy" alt="{title}">
     </div>
     <h3 class="g-seo-t2-title">{title}</h3>
     <div class="g-seo-t2-specs">{specs}</div>
@@ -152,7 +153,8 @@ templates = {
 .g-seo-t3-track::-webkit-scrollbar {{ display: none; }}
 .g-seo-t3-item {{ flex: 0 0 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; transition: transform 0.3s ease; }}
 .g-seo-t3-item:hover {{ transform: translateY(-5px); }}
-.g-seo-t3-img {{ width: 100%; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t3-img {{ width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; }}
+.g-seo-t3-img img {{ width: 100%; height: 100%; max-height: 180px; object-fit: contain; }}
 .g-seo-t3-title {{ margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
 .g-seo-t3-bot {{ display: flex; justify-content: space-between; align-items: center; margin-top: auto; }}
 .g-seo-t3-price {{ color: #111111; font-size: 16px; font-weight: 800; }}
@@ -161,6 +163,8 @@ templates = {
 @media (max-width: 640px) {{
     .g-seo-t3-sec {{ padding: 20px 5px; }}
     .g-seo-t3-item {{ flex: 0 0 170px; padding: 12px; }}
+    .g-seo-t3-img {{ height: 140px; }}
+    .g-seo-t3-img img {{ max-height: 140px; }}
     .g-seo-t3-title {{ font-size: 13px; margin-bottom: 8px; }}
     .g-seo-t3-price {{ font-size: 14px; }}
     .g-seo-t3-btn {{ padding: 6px 10px; font-size: 11px; }}
@@ -283,16 +287,25 @@ def extract_product_details(product_url):
         img_tag = soup.find('img')
         if img_tag: main_image = img_tag.get('data-src') or img_tag.get('src', '')
     main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
+    
+    # 提取底层的 Meta 真实价格，作为系统级提示外挂给大模型，彻底防止运费幻觉！
+    og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
+    price_hint = ""
+    if og_price and og_price.get('content'):
+        price_hint = f"\n[SYSTEM HINT]: The webpage's meta tag declares the true product price is {og_price.get('content')}. Ensure you extract THIS price (formatted as it appears on the page), NOT the 5.0€ shipping fee!"
+
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 核心修复：加强防幻觉指令，严禁瞎编
     prompt = f"""
     Analyze the following product page text. DO NOT TRANSLATE. Extract in the EXACT ORIGINAL LANGUAGE of the webpage.
-    CRITICAL RULES: DO NOT HALLUCINATE OR GUESS. ONLY extract what is explicitly on the page.
+    
+    CRITICAL RULES FOR PRICE:
+    - NEVER extract shipping fees or delivery fees (like "5,0€" for "Expédition Standard") as the product price.
+    - The real product price is usually listed at the top, near the title, and is usually higher than 10.00. {price_hint}
     
     Extract into JSON:
     1. "title": The EXACT product name.
-    2. "price": The MAIN product price exactly as written (e.g., "20,00 €"). CRITICAL: DO NOT extract shipping fees (like "Expédition Standard") as the price.
+    2. "price": The true product price exactly as written (e.g., "20,00 €"). DO NOT output shipping fees!
     3. "return_days": Look for the exact return window (e.g., "Retour de 99 jours" -> 99). If not explicitly found, output 30.
     4. "specs": Extract ONLY the top 1-3 physical specifications (like Material, Size). Very brief. If none, output "Standard".
     5. "cta_text": Generate a "Buy Now" button text in the original language.
@@ -314,17 +327,10 @@ def extract_product_details(product_url):
         st.toast(f"提取失败 [{product_url}]: {str(e)}")
         return None
 
-# ================= 核心清洗与智能货币检测 (终极修正版) =================
+# ================= 核心清洗与智能货币检测 =================
 
 def detect_currency_and_country(url, price_str=""):
-    """
-    双轨制精准匹配：
-    1. 优先从商品所在的 URL 域名判断国家和货币（最精准，防 AI 丢失符号）。
-    2. URL 无特征时，再通过价格字符串中的货币符号作为保底兜底。
-    """
     url_lower = str(url).lower()
-    
-    # 1. 域名直判 (绝对精准)
     if 'fr.' in url_lower or '.fr/' in url_lower: return 'EUR', 'FR'
     if 'de.' in url_lower or '.de/' in url_lower: return 'EUR', 'DE'
     if 'es.' in url_lower or '.es/' in url_lower: return 'EUR', 'ES'
@@ -334,15 +340,13 @@ def detect_currency_and_country(url, price_str=""):
     if 'au.' in url_lower or '.com.au/' in url_lower: return 'AUD', 'AU'
     if 'jp.' in url_lower or '.jp/' in url_lower: return 'JPY', 'JP'
     
-    # 2. 符号保底
     p = str(price_str).upper()
-    if '€' in p or 'EUR' in p: return 'EUR', 'FR' # 退到默认的欧洲区
+    if '€' in p or 'EUR' in p: return 'EUR', 'FR' 
     if '£' in p or 'GBP' in p: return 'GBP', 'GB'
     if 'A$' in p or 'AUD' in p: return 'AUD', 'AU'
     if 'C$' in p or 'CAD' in p: return 'CAD', 'CA'
     if '¥' in p or 'CNY' in p or 'RMB' in p: return 'CNY', 'CN'
-    
-    return 'USD', 'US' # 全局终极保底
+    return 'USD', 'US' 
 
 def format_price_for_schema(price_str):
     if not price_str: return "0.00"
@@ -362,7 +366,6 @@ def get_return_days(val):
 
 def generate_single_json_ld(title, image_url, price, specs, buy_link, return_days):
     price_num = format_price_for_schema(price)
-    # 将商品链接传入检测器，确保100%命中正确的国家和货币
     currency, country_code = detect_currency_and_country(buy_link, price)
     title_ld = title[:140] + "..." if len(title) > 140 else title
     days = get_return_days(return_days)
@@ -380,12 +383,12 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
         "offers": {
             "@type": "Offer",
             "price": price_num,
-            "priceCurrency": currency, # 完美注入货币
+            "priceCurrency": currency,
             "url": buy_link,
             "availability": "https://schema.org/InStock",
             "hasMerchantReturnPolicy": { 
                 "@type": "MerchantReturnPolicy",
-                "applicableCountry": country_code, # 完美注入国家
+                "applicableCountry": country_code,
                 "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
                 "merchantReturnDays": days,
                 "returnMethod": "https://schema.org/ReturnByMail",
@@ -396,7 +399,7 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
                 "shippingRate": {
                     "@type": "MonetaryAmount",
                     "value": "0",
-                    "currency": currency # 同步货币
+                    "currency": currency 
                 },
                 "deliveryTime": {
                     "@type": "ShippingDeliveryTime",
@@ -414,9 +417,7 @@ def generate_carousel_json_ld(products_data):
         buy_link = data.get("buy_link", "")
         price_str = data.get("price", "")
         price_num = format_price_for_schema(price_str)
-        # 同样，在轮播图中也依靠 URL 精准嗅探国家货币
         currency, country_code = detect_currency_and_country(buy_link, price_str)
-        
         title = data.get("title", "")
         title_ld = title[:140] + "..." if len(title) > 140 else title
         days = get_return_days(data.get("return_days", 30))
@@ -546,7 +547,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
         "title": "Custom Halloween Decoration",
         "price": "28.00 €",
         "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm",
-        "buy_link": "https://fr.callie.com/example-product", # 提供带 fr 的假链接，方便演示
+        "buy_link": "https://fr.callie.com/example-product", 
         "cta_text": "Add To Cart",
         "json_ld": ""
     }
@@ -578,7 +579,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4 and st.session_state.selected_template:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (国家代码与货币已完美映射)")
+    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}** (已彻底解决宽高失控与抓取错误)")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
     tmpl_config = templates[st.session_state.selected_template]
