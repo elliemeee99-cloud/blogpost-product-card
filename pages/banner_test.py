@@ -48,7 +48,6 @@ def fetch_direct_urls(url_list_text):
     return products
 
 def extract_basic_details(product_url):
-    """精简版的提取器，专门为了测试推送使用，减少大模型负担"""
     soup = get_soup(product_url)
     if not soup: return None
     main_image = ""
@@ -72,7 +71,6 @@ def extract_basic_details(product_url):
     except: return None
 
 def create_banner_collage(image_urls):
-    """Pillow 自动横向拼接 1200x630 的广告图"""
     imgs = []
     for url in image_urls:
         if len(imgs) >= 4: break 
@@ -96,7 +94,6 @@ def create_banner_collage(image_urls):
     return buf.getvalue()
 
 def push_to_wordpress(wp_url, username, password, title, html_content, banner_bytes):
-    """上传 Banner 为特色图片，并生成草稿"""
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
     media_id = None
@@ -172,16 +169,43 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             st.image(st.session_state.b_banner_bytes, caption="已生成的 1200x630 Banner 预览图")
 
     with col_b2:
-        st.info("🚀 测试 WordPress REST API，自动将生成的图片上传并设为草稿头图。")
-        wp_url = st.text_input("WordPress 网站地址 (如 https://yoursite.com)")
-        c1, c2 = st.columns(2)
-        with c1: wp_user = st.text_input("用户名")
-        with c2: wp_pass = st.text_input("应用密码 (App Password)", type="password")
+        st.info("🚀 选择目标网站，自动上传 Banner 并生成博客草稿。")
+        
+        # 定义核心站群列表 (支持无限扩展)
+        my_wp_sites = {
+            "🇩🇪 德语站 (www.callie.de)": "https://www.callie.de/blog",
+            "🇫🇷 法语站 (fr.callie.com)": "https://fr.callie.com/blog",
+            "🇪🇸 西班牙站 (www.callie.es)": "https://www.callie.es/blog",
+            "🇮🇹 意大利站 (it.callie.com)": "https://it.callie.com/blog",
+            "🇳🇱 荷兰站 (nl.callie.com)": "https://nl.callie.com/blog",
+            "🇳🇴 挪威站 (no.callie.com)": "https://no.callie.com/blog",
+            "🇸🇪 瑞典站 (www.callie.se)": "https://www.callie.se/blog",
+            "🇫🇮 芬兰站 (www.callie.fi)": "https://www.callie.fi/blog",
+            "🇵🇱 波兰站 (pl.callie.com)": "https://pl.callie.com/blog"
+        }
+        
+        # 优雅的下拉选择框！再也不用手敲网址！
+        selected_site_name = st.selectbox("🎯 请选择要发布的网站：", list(my_wp_sites.keys()))
+        wp_url = my_wp_sites[selected_site_name]
+        
+        # 密码智能加载系统
+        has_secrets = all(k in st.secrets for k in ["WP_USER", "WP_PASS"])
+        if has_secrets:
+            st.success(f"🔒 已从系统 Secrets 安全加载发布凭证。")
+            wp_user = st.secrets["WP_USER"]
+            wp_pass = st.secrets["WP_PASS"]
+        else:
+            c1, c2 = st.columns(2)
+            with c1: wp_user = st.text_input("用户名")
+            with c2: wp_pass = st.text_input("应用密码 (App Password)", type="password")
+            
         post_title = st.text_input("博客草稿标题", value="🔥 自动 Banner 推送测试")
         
         if st.button("🚀 2. 推送至 WordPress", type="primary"):
-            if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
-            elif not wp_url or not wp_user or not wp_pass: st.warning("请填完所有的 WordPress 验证信息！")
+            if not st.session_state.b_banner_bytes: 
+                st.warning("请先在左侧点击生成 Banner！")
+            elif not wp_user or not wp_pass: 
+                st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
                 with st.spinner("1/2 正在提取商品简单卡片 (用作草稿正文)..."):
                     if not st.session_state.b_final_html:
@@ -192,8 +216,10 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
                             if d: temp_html.append(f'<div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; display:flex;"><img src="{d.get("image_url")}" width="100" style="margin-right:15px;"><div><h4>{d.get("title")}</h4><p style="color:red; font-size:18px;"><b>{d.get("price")}</b></p><a href="{d.get("buy_link")}" target="_blank" style="background:#ff6f59; color:#fff; padding:8px 15px; text-decoration:none; border-radius:5px;">Buy Now</a></div></div>')
                         st.session_state.b_final_html = "\n".join(temp_html)
                 
-                with st.spinner("2/2 正在通过 API 上传 Banner 并发布草稿..."):
+                with st.spinner(f"2/2 正在向 {selected_site_name} 推送，这可能需要几十秒..."):
                     content = '<p>这是一篇自动生成的测试草稿。</p>' + st.session_state.b_final_html
                     success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, content, st.session_state.b_banner_bytes)
-                    if success: st.success("🎉 发布成功！请登录 WordPress 后台查看最新草稿。")
-                    else: st.error(msg)
+                    if success: 
+                        st.success(f"🎉 成功发布到【{selected_site_name}】！请登录对应的 WordPress 后台查看最新草稿。")
+                    else: 
+                        st.error(msg)
