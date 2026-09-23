@@ -1,5 +1,6 @@
 streamlit
-openai
 requests
 beautifulsoup4
 lxml
+openai
+Pillow
