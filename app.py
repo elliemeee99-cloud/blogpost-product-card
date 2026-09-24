@@ -7,14 +7,25 @@ import re
 from urllib.parse import urljoin
 
 # ================= 配置与初始化 =================
-st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
+st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
+# 彻底隐藏左侧边栏，保留 100% 宽屏空间
 st.markdown("""
 <style>
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
 [data-testid="stTooltipIcon"] svg { display: none !important; }
 [data-testid="stTooltipIcon"]::after { content: "ⓘ"; font-size: 16px; color: #888; margin-left: 2px; }
 </style>
 """, unsafe_allow_html=True)
+
+# ================= 顶部全局导航栏 =================
+nav_col1, nav_col2, _ = st.columns([1.5, 1.5, 7])
+with nav_col1:
+    st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
+with nav_col2:
+    st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
+st.markdown("---")
 
 st.title("🛍️ 博客商品卡片自动生成器 (GEO响应式版)")
 
@@ -539,8 +550,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                     st.caption("👁️ 视觉预览 (响应式)")
                     st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
                 with col_right:
-                    st.caption("💻 对应 HTML 代码")
-                    with st.expander("点击展开 / 复制 HTML 代码"):
+                    # 重新启用默认隐藏的折叠面板组件！
+                    with st.expander("💻 点击展开 / 复制完整 HTML 代码"):
                         st.code(card_html, language='html')
                 st.write("---") 
         my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个商品...")
@@ -560,8 +571,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             st.caption("👁️ 视觉预览 (响应式，可横向滑动)")
             st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
         with col_right:
-            st.caption("💻 对应完整 HTML 代码")
-            with st.expander("点击展开 / 复制完整轮播代码"):
+            # 重新启用默认隐藏的折叠面板组件！
+            with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"):
                 st.code(final_carousel_html, language='html')
                 
     st.success("✅ 全部处理完毕！已自动注入自适应 CSS 与 JSON-LD 结构化数据。")
