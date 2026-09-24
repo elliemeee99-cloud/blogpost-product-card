@@ -9,7 +9,6 @@ from urllib.parse import urljoin
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
-# 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
 .stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
@@ -72,7 +71,7 @@ if "generated_cards_list" not in st.session_state: st.session_state.generated_ca
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
-# ================= HTML 响应式模板库 (防破坏 Inline CSS) =================
+# ================= HTML 响应式模板库 =================
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
@@ -286,7 +285,7 @@ def generate_carousel_json_ld(products_data):
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
-# ================= WordPress 智能注入函数 (修复静默失败版) =================
+# ================= WordPress 智能注入函数 (雷达级日志增强版) =================
 def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
@@ -297,20 +296,21 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
         current_content = post_data.get('content', {}).get('raw', '')
     except Exception as e: return False, f"读取异常: {e}"
 
-    # 标准化包装 HTML，保证在 Gutenberg 编辑器中不报错
     formatted_cards = [f'\n<!-- wp:html -->\n{card}\n<!-- /wp:html -->\n' for card in cards_html_list]
     
-    # 核心修复点：不要切断 wp:heading 内部！将卡片安全地插入整个区块的外层。
     parts = re.split(r'(<!--\s*wp:heading[^>]*-->\s*<h2[^>]*>|<h2[^>]*>)', current_content, flags=re.IGNORECASE)
     
     new_content = ""
     card_idx = 0
+    h2_found_count = 0
+    
     if len(parts) == 1:
         new_content = current_content + "".join(formatted_cards)
     else:
         for part in parts:
             part_lower = part.strip().lower()
             if part_lower.startswith('<h2') or part_lower.startswith('<!-- wp:heading'):
+                h2_found_count += 1
                 if card_idx < len(formatted_cards):
                     new_content += formatted_cards[card_idx]
                     card_idx += 1
@@ -322,7 +322,13 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     update_data = {'content': new_content}
     try:
         res_update = requests.post(f"{base_api}/posts/{post_id}", json=update_data, auth=auth, timeout=30)
-        if res_update.status_code in [200, 201]: return True, f"成功无损注入 {len(cards_html_list)} 个模块！"
+        if res_update.status_code in [200, 201]: 
+            # 返回极其详尽的追踪日志给用户
+            msg = f"成功写入数据库！系统雷达检测到 {h2_found_count} 个 H2 标签，已安全插入 {min(card_idx, h2_found_count)} 个模块。"
+            if card_idx > h2_found_count:
+                msg += f" (另有 {card_idx - h2_found_count} 个模块被追加到了文章最末尾)。"
+            msg += " 请完全刷新您的 WordPress 后台页面以查看。"
+            return True, msg
         else: return False, f"更新失败: {res_update.text}"
     except Exception as e: return False, f"更新异常: {e}"
 
@@ -475,7 +481,6 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
-        # 恢复单账号安全加载逻辑
         user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
         
@@ -484,13 +489,12 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
             wp_user = st.secrets[user_key]
             wp_pass = st.secrets[pass_key]
         else:
-            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
+            st.warning(f"⚠️ 缺少 {pass_key}")
             c1, c2 = st.columns(2)
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
-            with c2: wp_pass = st.text_input(f"应用密码 (缺少 {pass_key})", type="password")
+            with c2: wp_pass = st.text_input(f"应用密码", type="password")
             
         target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。")
-        
         if st.button("🚀 开始无损注入并更新", type="primary"):
             if not target_post_id.strip() or not wp_user or not wp_pass: st.warning("请确保 ID 与验证信息完整！")
             else:
