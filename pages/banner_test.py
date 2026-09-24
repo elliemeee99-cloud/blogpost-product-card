@@ -110,26 +110,52 @@ def create_banner_collage(image_urls):
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-def push_to_wordpress(wp_url, username, password, title, html_content, banner_bytes):
+def push_to_wordpress(wp_url, username, password, title, html_content, banner_bytes, post_id=""):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
     media_id = None
+    media_url = ""
     
+    # 1. 上传 Banner 进媒体库
     if banner_bytes:
-        headers = {'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="test-banner.jpg"'}
+        headers = {'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}
         try:
             res_media = requests.post(f"{base_api}/media", headers=headers, data=banner_bytes, auth=auth, timeout=30)
-            if res_media.status_code in [200, 201]: media_id = res_media.json().get('id')
-            else: return False, f"图片上传失败: {res_media.text}"
+            if res_media.status_code in [200, 201]: 
+                media_data = res_media.json()
+                media_id = media_data.get('id')
+                media_url = media_data.get('source_url') # 获取上传后的真实图片链接
+            else: 
+                return False, f"图片上传失败: {res_media.text}"
         except Exception as e: return False, f"图片上传异常: {e}"
             
-    post_data = {'title': title, 'content': html_content, 'status': 'draft'}
-    if media_id: post_data['featured_media'] = media_id
+    # 核心体验升级：将上传好的 Banner 图片，强行插入到正文的最上方！
+    if media_url:
+        html_content = f'<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>' + html_content
+
+    # 2. 组装文章数据
+    post_data = {'content': html_content}
+    if media_id: 
+        post_data['featured_media'] = media_id # 设置为特色图片
         
+    # 3. 推送逻辑（区分新建与更新）
     try:
-        res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
-        if res_post.status_code in [200, 201]: return True, res_post.json().get('link')
-        else: return False, f"草稿创建失败: {res_post.text}"
+        if post_id.strip():
+            # 更新已存在的文章 (使用目标 ID)
+            if title: post_data['title'] = title
+            res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=post_data, auth=auth, timeout=30)
+            action_text = "更新特定文章"
+        else:
+            # 新建草稿
+            post_data['title'] = title
+            post_data['status'] = 'draft'
+            res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
+            action_text = "新建草稿"
+            
+        if res_post.status_code in [200, 201]: 
+            return True, f"{action_text}成功！"
+        else: 
+            return False, f"{action_text}失败: {res_post.text}"
     except Exception as e: return False, f"发布异常: {e}"
 
 # ================= UI 布局 =================
@@ -186,7 +212,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             st.image(st.session_state.b_banner_bytes, caption="已生成的 1200x630 Banner 预览图")
 
     with col_b2:
-        st.info("🚀 选择目标网站，自动上传 Banner 并生成博客草稿。")
+        st.info("🚀 选择目标网站，自动更新指定文章或新建博客草稿。")
         
         my_wp_sites = {
             "🇩🇪 德语站 (www.callie.de)": {"url": "https://www.callie.de/blog", "prefix": "DE"},
@@ -205,22 +231,21 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         wp_url = selected_site_data["url"]
         site_prefix = selected_site_data["prefix"]
         
-        # 核心修改：统一的用户名，独立的站点密码
         user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
         
-        # 密码智能加载系统
         if user_key in st.secrets and pass_key in st.secrets:
-            st.success(f"🔒 已自动加载全局账号与【{selected_site_name.split(' ')[1]}】的专属密码。")
+            st.success(f"🔒 已自动加载【{selected_site_name.split(' ')[1]}】的专属发布凭证。")
             wp_user = st.secrets[user_key]
             wp_pass = st.secrets[pass_key]
         else:
-            st.warning(f"⚠️ 未在 Secrets 中找到 {pass_key}，请手动输入或前往后台添加。")
+            st.warning(f"⚠️ 未在 Secrets 中找到 {pass_key}，请前往后台添加。")
             c1, c2 = st.columns(2)
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
             with c2: wp_pass = st.text_input(f"应用密码 (缺少 {pass_key})", type="password")
             
-        post_title = st.text_input("博客草稿标题", value="🔥 自动 Banner 推送测试")
+        post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
+        target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID (纯数字，如 1024)。")
         
         if st.button("🚀 2. 推送至 WordPress", type="primary"):
             if not st.session_state.b_banner_bytes: 
@@ -228,7 +253,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             elif not wp_user or not wp_pass: 
                 st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
-                with st.spinner("1/2 正在提取商品简单卡片 (用作草稿正文)..."):
+                with st.spinner("1/2 正在提取商品简单卡片..."):
                     if not st.session_state.b_final_html:
                         selected_items = [p for p in st.session_state.b_pool if p["url"] in st.session_state.b_urls]
                         temp_html = []
@@ -237,10 +262,10 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
                             if d: temp_html.append(f'<div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; display:flex;"><img src="{d.get("image_url")}" width="100" style="margin-right:15px;"><div><h4>{d.get("title")}</h4><p style="color:red; font-size:18px;"><b>{d.get("price")}</b></p><a href="{d.get("buy_link")}" target="_blank" style="background:#ff6f59; color:#fff; padding:8px 15px; text-decoration:none; border-radius:5px;">Buy Now</a></div></div>')
                         st.session_state.b_final_html = "\n".join(temp_html)
                 
-                with st.spinner(f"2/2 正在向 {selected_site_name} 推送，这可能需要几十秒..."):
+                with st.spinner(f"2/2 正在向 {selected_site_name} 推送中，这可能需要几十秒..."):
                     content = '<p>这是一篇自动生成的测试草稿。</p>' + st.session_state.b_final_html
-                    success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, content, st.session_state.b_banner_bytes)
+                    success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, content, st.session_state.b_banner_bytes, target_post_id)
                     if success: 
-                        st.success(f"🎉 成功发布到【{selected_site_name}】！请登录对应的 WordPress 后台查看最新草稿。")
+                        st.success(f"🎉 成功：{msg} 请登录对应的 WordPress 后台查看。")
                     else: 
                         st.error(msg)
