@@ -8,7 +8,24 @@ from PIL import Image, ImageOps
 from io import BytesIO
 
 # ================= 配置与初始化 =================
-st.set_page_config(page_title="Banner与推送测试", layout="wide")
+st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
+
+# 彻底隐藏左侧边栏，保留 100% 宽屏空间
+st.markdown("""
+<style>
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ================= 顶部全局导航栏 =================
+nav_col1, nav_col2, _ = st.columns([1.5, 1.5, 7])
+with nav_col1:
+    st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
+with nav_col2:
+    st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
+st.markdown("---")
+
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
@@ -171,7 +188,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
     with col_b2:
         st.info("🚀 选择目标网站，自动上传 Banner 并生成博客草稿。")
         
-        # 定义核心站群列表 (支持无限扩展)
         my_wp_sites = {
             "🇩🇪 德语站 (www.callie.de)": "https://www.callie.de/blog",
             "🇫🇷 法语站 (fr.callie.com)": "https://fr.callie.com/blog",
@@ -184,11 +200,9 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             "🇵🇱 波兰站 (pl.callie.com)": "https://pl.callie.com/blog"
         }
         
-        # 优雅的下拉选择框！再也不用手敲网址！
         selected_site_name = st.selectbox("🎯 请选择要发布的网站：", list(my_wp_sites.keys()))
         wp_url = my_wp_sites[selected_site_name]
         
-        # 密码智能加载系统
         has_secrets = all(k in st.secrets for k in ["WP_USER", "WP_PASS"])
         if has_secrets:
             st.success(f"🔒 已从系统 Secrets 安全加载发布凭证。")
