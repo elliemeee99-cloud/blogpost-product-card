@@ -10,7 +10,7 @@ from io import BytesIO
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
 
-# 彻底隐藏左侧边栏，保留 100% 宽屏空间
+# 彻底隐藏左侧边栏
 st.markdown("""
 <style>
 [data-testid="stSidebar"] { display: none !important; }
@@ -189,29 +189,36 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         st.info("🚀 选择目标网站，自动上传 Banner 并生成博客草稿。")
         
         my_wp_sites = {
-            "🇩🇪 德语站 (www.callie.de)": "https://www.callie.de/blog",
-            "🇫🇷 法语站 (fr.callie.com)": "https://fr.callie.com/blog",
-            "🇪🇸 西班牙站 (www.callie.es)": "https://www.callie.es/blog",
-            "🇮🇹 意大利站 (it.callie.com)": "https://it.callie.com/blog",
-            "🇳🇱 荷兰站 (nl.callie.com)": "https://nl.callie.com/blog",
-            "🇳🇴 挪威站 (no.callie.com)": "https://no.callie.com/blog",
-            "🇸🇪 瑞典站 (www.callie.se)": "https://www.callie.se/blog",
-            "🇫🇮 芬兰站 (www.callie.fi)": "https://www.callie.fi/blog",
-            "🇵🇱 波兰站 (pl.callie.com)": "https://pl.callie.com/blog"
+            "🇩🇪 德语站 (www.callie.de)": {"url": "https://www.callie.de/blog", "prefix": "DE"},
+            "🇫🇷 法语站 (fr.callie.com)": {"url": "https://fr.callie.com/blog", "prefix": "FR"},
+            "🇪🇸 西班牙站 (www.callie.es)": {"url": "https://www.callie.es/blog", "prefix": "ES"},
+            "🇮🇹 意大利站 (it.callie.com)": {"url": "https://it.callie.com/blog", "prefix": "IT"},
+            "🇳🇱 荷兰站 (nl.callie.com)": {"url": "https://nl.callie.com/blog", "prefix": "NL"},
+            "🇳🇴 挪威站 (no.callie.com)": {"url": "https://no.callie.com/blog", "prefix": "NO"},
+            "🇸🇪 瑞典站 (www.callie.se)": {"url": "https://www.callie.se/blog", "prefix": "SE"},
+            "🇫🇮 芬兰站 (www.callie.fi)": {"url": "https://www.callie.fi/blog", "prefix": "FI"},
+            "🇵🇱 波兰站 (pl.callie.com)": {"url": "https://pl.callie.com/blog", "prefix": "PL"}
         }
         
         selected_site_name = st.selectbox("🎯 请选择要发布的网站：", list(my_wp_sites.keys()))
-        wp_url = my_wp_sites[selected_site_name]
+        selected_site_data = my_wp_sites[selected_site_name]
+        wp_url = selected_site_data["url"]
+        site_prefix = selected_site_data["prefix"]
         
-        has_secrets = all(k in st.secrets for k in ["WP_USER", "WP_PASS"])
-        if has_secrets:
-            st.success(f"🔒 已从系统 Secrets 安全加载发布凭证。")
-            wp_user = st.secrets["WP_USER"]
-            wp_pass = st.secrets["WP_PASS"]
+        # 核心修改：统一的用户名，独立的站点密码
+        user_key = "WP_USER"
+        pass_key = f"WP_PASS_{site_prefix}"
+        
+        # 密码智能加载系统
+        if user_key in st.secrets and pass_key in st.secrets:
+            st.success(f"🔒 已自动加载全局账号与【{selected_site_name.split(' ')[1]}】的专属密码。")
+            wp_user = st.secrets[user_key]
+            wp_pass = st.secrets[pass_key]
         else:
+            st.warning(f"⚠️ 未在 Secrets 中找到 {pass_key}，请手动输入或前往后台添加。")
             c1, c2 = st.columns(2)
-            with c1: wp_user = st.text_input("用户名")
-            with c2: wp_pass = st.text_input("应用密码 (App Password)", type="password")
+            with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
+            with c2: wp_pass = st.text_input(f"应用密码 (缺少 {pass_key})", type="password")
             
         post_title = st.text_input("博客草稿标题", value="🔥 自动 Banner 推送测试")
         
