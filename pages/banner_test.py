@@ -127,14 +127,25 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
 
     try:
         if post_id.strip():
-            res_get = requests.get(f"{base_api}/posts/{post_id.strip()}?context=edit", auth=auth, timeout=15)
+            post_endpoint = f"{base_api}/posts/{post_id.strip()}"
+            res_get = requests.get(f"{post_endpoint}?context=edit", auth=auth, timeout=15, allow_redirects=True)
+            if res_get.status_code == 404:
+                post_endpoint = f"{base_api}/pages/{post_id.strip()}"
+                res_get = requests.get(f"{post_endpoint}?context=edit", auth=auth, timeout=15, allow_redirects=True)
+                
             if res_get.status_code != 200: return False, "无法读取原文章。"
+            
+            real_endpoint = res_get.url.split('?')[0]
             current_content = res_get.json().get('content', {}).get('raw', '')
+            
             if media_url: current_content = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' + current_content
             update_data = {'content': current_content}
             if title: update_data['title'] = title
             if media_id: update_data['featured_media'] = media_id
-            res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=update_data, auth=auth, timeout=30)
+            
+            res_post = requests.post(real_endpoint, json=update_data, auth=auth, timeout=30, allow_redirects=False)
+            if res_post.status_code in [301, 302, 307, 308]:
+                res_post = requests.post(res_post.headers.get('Location'), json=update_data, auth=auth, timeout=30, allow_redirects=False)
             action_text = "更新特定文章"
         else:
             banner_html = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' if media_url else ""
@@ -143,7 +154,7 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
             res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
             action_text = "新建草稿"
             
-        if res_post.status_code in [200, 201]: return True, f"{action_text}成功！"
+        if res_post.status_code in [200, 201]: return True, f"{action_text}成功并写入！"
         else: return False, f"{action_text}失败: {res_post.text}"
     except Exception as e: return False, f"发布异常: {e}"
 
@@ -233,7 +244,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
-        # 恢复单账号安全加载逻辑
         user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
         
@@ -250,11 +260,11 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
         target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID。")
         
-        if st.button("🚀 2. 推送至 WordPress", type="primary"):
+        if st.button("🚀 2. 推送并强制校验", type="primary"):
             if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
             elif not wp_user or not wp_pass: st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
-                with st.spinner(f"正在向 {selected_site_name} 推送中..."):
+                with st.spinner(f"正在穿透跳转保护进行推送..."):
                     success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, st.session_state.b_banner_bytes, target_post_id)
-                    if success: st.success(f"🎉 成功：{msg} 请登录对应的 WordPress 后台查看。")
+                    if success: st.success(f"🎉 {msg}")
                     else: st.error(msg)
