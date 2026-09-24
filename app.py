@@ -7,7 +7,7 @@ import re
 from urllib.parse import urljoin
 
 # ================= 配置与初始化 =================
-st.set_page_config(page_title="智能商品卡片生成器", layout="wide")
+st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
 # 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
@@ -32,7 +32,7 @@ h3 { font-size: 1.2rem !important; }
 /* 3. 间距与留白 */
 [data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1200px; }
 
-/* 4. 组件样式 - 顶部导航 (谷歌药丸状标签) */
+/* 4. 组件样式 - 顶部导航 */
 [data-testid="stPageLink-NavLink"] {
     background-color: #FFFFFF;
     border-radius: 24px;
@@ -47,10 +47,10 @@ h3 { font-size: 1.2rem !important; }
     border-color: #DADCE0;
 }
 [data-testid="stPageLink-NavLink"] p {
-    color: #1A73E8 !important; /* 谷歌蓝 */
+    color: #1A73E8 !important; 
 }
 
-/* 4. 组件样式 - 按钮 (修复文字看不见的问题) */
+/* 4. 组件样式 - 按钮 */
 .stButton > button {
     border-radius: 4px !important;
     border: none !important;
@@ -59,11 +59,11 @@ h3 { font-size: 1.2rem !important; }
     transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"] {
-    background-color: #1A73E8 !important; /* 谷歌蓝 */
+    background-color: #1A73E8 !important; 
     box-shadow: none !important;
 }
 .stButton > button[kind="primary"] * {
-    color: #FFFFFF !important; /* 强制所有内部文字为白色 */
+    color: #FFFFFF !important; 
 }
 .stButton > button[kind="primary"]:hover {
     background-color: #174EA6 !important;
@@ -89,7 +89,7 @@ h3 { font-size: 1.2rem !important; }
 }
 .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
     border: 2px solid #1A73E8 !important;
-    padding: 9px 13px !important; /* 补偿边框厚度避免抖动 */
+    padding: 9px 13px !important; 
     box-shadow: none !important;
 }
 
@@ -123,6 +123,9 @@ h3 { font-size: 1.2rem !important; }
     color: #1A73E8 !important;
 }
 
+/* 隐藏侧边栏逻辑 */
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -147,6 +150,7 @@ if "matched_products" not in st.session_state: st.session_state.matched_products
 if "step" not in st.session_state: st.session_state.step = 1
 if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
+if "generated_cards_list" not in st.session_state: st.session_state.generated_cards_list = []
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
@@ -511,6 +515,55 @@ def generate_carousel_json_ld(products_data):
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
 
+# ================= WordPress 智能注入函数 =================
+def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
+    """抓取现有文章，并在每个 H2 标签上方注入商品卡片"""
+    base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
+    auth = (username, password)
+    
+    # 1. 获取当前文章的纯净 HTML
+    try:
+        res_get = requests.get(f"{base_api}/posts/{post_id}?context=edit", auth=auth, timeout=15)
+        if res_get.status_code != 200:
+            return False, f"无法读取文章 (ID: {post_id}): {res_get.text}"
+        
+        post_data = res_get.json()
+        current_content = post_data.get('content', {}).get('raw', '')
+    except Exception as e:
+        return False, f"读取文章异常: {e}"
+
+    # 2. 解析并智能插入 HTML
+    soup = BeautifulSoup(current_content, 'html.parser')
+    h2_tags = soup.find_all('h2')
+    
+    if not h2_tags:
+        # 如果文章没有 H2，直接安全地追加到末尾
+        for card_html in cards_html_list:
+            soup.append(BeautifulSoup(card_html, 'html.parser'))
+    else:
+        card_idx = 0
+        # 依次插入到每个 H2 标签的正上方
+        for h2 in h2_tags:
+            if card_idx < len(cards_html_list):
+                h2.insert_before(BeautifulSoup(cards_html_list[card_idx], 'html.parser'))
+                card_idx += 1
+        
+        # 如果生成的商品卡片比 H2 标签多，剩余卡片追加到文章末尾
+        while card_idx < len(cards_html_list):
+            soup.append(BeautifulSoup(cards_html_list[card_idx], 'html.parser'))
+            card_idx += 1
+
+    # 3. 推送更新
+    update_data = {'content': str(soup)}
+    try:
+        res_update = requests.post(f"{base_api}/posts/{post_id}", json=update_data, auth=auth, timeout=30)
+        if res_update.status_code in [200, 201]:
+            return True, f"成功将 {len(cards_html_list)} 个卡片模块智能注入到文章中！"
+        else:
+            return False, f"更新失败: {res_update.text}"
+    except Exception as e:
+        return False, f"更新异常: {e}"
+
 # ================= 界面工作流 =================
 
 st.markdown("### 步骤 1：输入数据源")
@@ -624,6 +677,7 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     total = len(selected_items)
     all_extracted_data = []
+    generated_single_cards = [] # 用于收集生成的单个独立卡片HTML
     
     for i, item in enumerate(selected_items):
         prod_url = item["url"]
@@ -651,6 +705,8 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                     buy_link=details_data.get("buy_link", ""), cta_text=details_data.get("cta_text", "Buy Now"),
                     json_ld=ld_script
                 )
+                generated_single_cards.append(card_html) # 存入待注入列表
+                
                 st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
                 col_left, col_right = st.columns([1, 1], gap="large")
                 with col_left:
@@ -672,6 +728,10 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                 price=data.get("price", ""), buy_link=data.get("buy_link", ""), cta_text=data.get("cta_text", "Buy Now")
             )
         final_carousel_html = tmpl_config["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
+        
+        # 轮播图作为一个整体代码块存入注入列表
+        st.session_state.generated_cards_list = [final_carousel_html]
+        
         col_left, col_right = st.columns([1, 1], gap="large")
         with col_left:
             st.caption("👁️ 视觉预览 (响应式，可横向滑动)")
@@ -679,5 +739,63 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
         with col_right:
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"):
                 st.code(final_carousel_html, language='html')
+    elif tmpl_config["type"] == "single" and generated_single_cards:
+        st.session_state.generated_cards_list = generated_single_cards
                 
     st.success("✅ 全部处理完毕！已自动注入自适应 CSS 与 JSON-LD 结构化数据。")
+
+# ================= 步骤 5：自动注入文章 =================
+if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_list", None):
+    st.markdown("---")
+    st.markdown("### 步骤 5：智能注入 WordPress 文章")
+    
+    col_w1, col_w2 = st.columns([1, 1], gap="large")
+    with col_w1:
+        st.info("💡 **H2 对齐注入逻辑**\n\n系统会自动读取目标文章源码，并将上方生成的商品卡片，按顺序依次插入到文章中每个 `<h2>` 标题标签的上方。若卡片数量多于 H2 数量，剩余的卡片会自动追加到文章末尾。")
+        st.markdown(f"**当前待注入卡片/模块数：** `{len(st.session_state.generated_cards_list)}` 个")
+        
+    with col_w2:
+        my_wp_sites = {
+            "🇩🇪 德语站 (www.callie.de)": {"url": "https://www.callie.de/blog", "prefix": "DE"},
+            "🇫🇷 法语站 (fr.callie.com)": {"url": "https://fr.callie.com/blog", "prefix": "FR"},
+            "🇪🇸 西班牙站 (www.callie.es)": {"url": "https://www.callie.es/blog", "prefix": "ES"},
+            "🇮🇹 意大利站 (it.callie.com)": {"url": "https://it.callie.com/blog", "prefix": "IT"},
+            "🇳🇱 荷兰站 (nl.callie.com)": {"url": "https://nl.callie.com/blog", "prefix": "NL"},
+            "🇳🇴 挪威站 (no.callie.com)": {"url": "https://no.callie.com/blog", "prefix": "NO"},
+            "🇸🇪 瑞典站 (www.callie.se)": {"url": "https://www.callie.se/blog", "prefix": "SE"},
+            "🇫🇮 芬兰站 (www.callie.fi)": {"url": "https://www.callie.fi/blog", "prefix": "FI"},
+            "🇵🇱 波兰站 (pl.callie.com)": {"url": "https://pl.callie.com/blog", "prefix": "PL"}
+        }
+        
+        selected_site_name = st.selectbox("🎯 选择目标网站：", list(my_wp_sites.keys()))
+        selected_site_data = my_wp_sites[selected_site_name]
+        wp_url = selected_site_data["url"]
+        site_prefix = selected_site_data["prefix"]
+        
+        user_key = "WP_USER"
+        pass_key = f"WP_PASS_{site_prefix}"
+        
+        if user_key in st.secrets and pass_key in st.secrets:
+            st.success(f"🔒 凭证已加载")
+            wp_user = st.secrets[user_key]
+            wp_pass = st.secrets[pass_key]
+        else:
+            st.warning(f"⚠️ 缺少 {pass_key}")
+            c1, c2 = st.columns(2)
+            with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
+            with c2: wp_pass = st.text_input(f"应用密码", type="password")
+            
+        target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。可以在 WP 后台编辑页的网址中找到 post=XXX。")
+        
+        if st.button("🚀 开始注入并更新文章", type="primary"):
+            if not target_post_id.strip(): 
+                st.warning("请填写文章 ID！")
+            elif not wp_user or not wp_pass: 
+                st.warning("请确保验证信息完整！")
+            else:
+                with st.spinner("正在远程读取文章并执行注入操作..."):
+                    success, msg = push_cards_to_wp_h2(wp_url, wp_user, wp_pass, target_post_id, st.session_state.generated_cards_list)
+                    if success:
+                        st.success(f"🎉 {msg}")
+                    else:
+                        st.error(msg)
