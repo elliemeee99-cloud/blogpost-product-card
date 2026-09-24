@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
+# 🎨 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
 .stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
@@ -71,7 +72,7 @@ if "generated_cards_list" not in st.session_state: st.session_state.generated_ca
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
-# ================= HTML 响应式模板库 =================
+# ================= HTML 响应式模板库 (防破坏 Inline CSS) =================
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
@@ -285,19 +286,31 @@ def generate_carousel_json_ld(products_data):
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
-# ================= WordPress 智能注入函数 (雷达级日志增强版) =================
+# ================= 终极防空发更新函数 =================
 def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
+    
+    # 1. 动态探测真实 Endpoint（过滤跳转）
+    post_endpoint = f"{base_api}/posts/{post_id}"
     try:
-        res_get = requests.get(f"{base_api}/posts/{post_id}?context=edit", auth=auth, timeout=15)
-        if res_get.status_code != 200: return False, f"无法读取文章: {res_get.text}"
+        res_get = requests.get(f"{post_endpoint}?context=edit", auth=auth, timeout=15, allow_redirects=True)
+        if res_get.status_code == 404:
+            post_endpoint = f"{base_api}/pages/{post_id}"
+            res_get = requests.get(f"{post_endpoint}?context=edit", auth=auth, timeout=15, allow_redirects=True)
+            
+        if res_get.status_code != 200: 
+            return False, f"无法读取原文，权限不足或查无此文: {res_get.text[:100]}"
+            
+        # 记录绝对路由，防止稍后 POST 被强转 GET
+        real_endpoint = res_get.url.split('?')[0] 
         post_data = res_get.json()
         current_content = post_data.get('content', {}).get('raw', '')
-    except Exception as e: return False, f"读取异常: {e}"
+    except Exception as e: 
+        return False, f"读取异常: {e}"
 
+    # 2. 生成新内容
     formatted_cards = [f'\n<!-- wp:html -->\n{card}\n<!-- /wp:html -->\n' for card in cards_html_list]
-    
     parts = re.split(r'(<!--\s*wp:heading[^>]*-->\s*<h2[^>]*>|<h2[^>]*>)', current_content, flags=re.IGNORECASE)
     
     new_content = ""
@@ -319,18 +332,33 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
             new_content += formatted_cards[card_idx]
             card_idx += 1
 
+    # 3. 强制防跳转写入与反向安全校验
     update_data = {'content': new_content}
     try:
-        res_update = requests.post(f"{base_api}/posts/{post_id}", json=update_data, auth=auth, timeout=30)
-        if res_update.status_code in [200, 201]: 
-            # 返回极其详尽的追踪日志给用户
-            msg = f"成功写入数据库！系统雷达检测到 {h2_found_count} 个 H2 标签，已安全插入 {min(card_idx, h2_found_count)} 个模块。"
+        # 手动拦截跳转，确保数据是以 POST 方式硬砸进去的
+        res_update = requests.post(real_endpoint, json=update_data, auth=auth, timeout=30, allow_redirects=False)
+        if res_update.status_code in [301, 302, 307, 308]:
+            real_endpoint = res_update.headers.get('Location')
+            res_update = requests.post(real_endpoint, json=update_data, auth=auth, timeout=30, allow_redirects=False)
+
+        if res_update.status_code in [200, 201]:
+            # 拿到返回的最新数据库数据
+            updated_json = res_update.json()
+            saved_content = updated_json.get('content', {}).get('raw', '')
+            
+            # 扫描数据库里有没有我们刚刚送进去的数据
+            if "application/ld+json" not in saved_content and len(cards_html_list) > 0:
+                return False, "❌ 致命错误：API 表面提示成功，但实际数据写入被服务器安全插件 (如防火墙/WAF) 拦截。请检查是否屏蔽了 JSON-LD 标签。"
+
+            msg = f"已强制写入数据库校验通过！雷达检测到 {h2_found_count} 个 H2，成功插入 {min(card_idx, h2_found_count)} 个模块"
             if card_idx > h2_found_count:
-                msg += f" (另有 {card_idx - h2_found_count} 个模块被追加到了文章最末尾)。"
-            msg += " 请完全刷新您的 WordPress 后台页面以查看。"
+                msg += f" (另有 {card_idx - h2_found_count} 个追加到文末)。"
+            msg += " 👉 请现在去后台按 F5 完全刷新页面。"
             return True, msg
-        else: return False, f"更新失败: {res_update.text}"
-    except Exception as e: return False, f"更新异常: {e}"
+        else: 
+            return False, f"更新失败: {res_update.text[:200]}"
+    except Exception as e: 
+        return False, f"更新异常: {e}"
 
 # ================= 界面工作流 =================
 
@@ -489,16 +517,17 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
             wp_user = st.secrets[user_key]
             wp_pass = st.secrets[pass_key]
         else:
-            st.warning(f"⚠️ 缺少 {pass_key}")
+            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
             c1, c2 = st.columns(2)
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
             with c2: wp_pass = st.text_input(f"应用密码", type="password")
             
         target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。")
-        if st.button("🚀 开始无损注入并更新", type="primary"):
+        
+        if st.button("🚀 开始强制写入校验", type="primary"):
             if not target_post_id.strip() or not wp_user or not wp_pass: st.warning("请确保 ID 与验证信息完整！")
             else:
-                with st.spinner("正在防破坏式注入并更新文章..."):
+                with st.spinner("正在穿透路由重定向并强制写入数据库..."):
                     success, msg = push_cards_to_wp_h2(wp_url, wp_user, wp_pass, target_post_id, st.session_state.generated_cards_list)
                     if success: st.success(f"🎉 {msg}")
                     else: st.error(msg)
