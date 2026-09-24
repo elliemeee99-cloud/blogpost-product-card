@@ -9,123 +9,122 @@ from PIL import Image, ImageOps
 from io import BytesIO
 
 # ================= 配置与初始化 =================
-st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Banner与推送测试", layout="wide")
 
-# 🎨 核心 UI 视觉重构：SaaS 仪表盘 / 科技紫风格
+# 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
-/* 1. 全局配色与背景 */
+/* 1. 谷歌全局配色与背景 */
 .stApp {
-    background-color: #F9FAFB;
-    color: #111827;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #F8F9FA;
+    color: #202124;
+    font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
 }
-p, span, label { color: #4B5563 !important; }
+p, span, label { color: #5F6368 !important; }
 
-/* 2. 字体排版 (无衬线, 现代感) */
+/* 2. 字体排版 */
 h1, h2, h3, h4 {
-    font-family: 'Inter', -apple-system, sans-serif !important;
-    color: #111827 !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.02em;
+    font-family: 'Google Sans', 'Roboto', sans-serif !important;
+    color: #202124 !important;
+    font-weight: 500 !important;
 }
-h1 { font-size: 2rem !important; padding-bottom: 0.5rem; }
-h3 { font-size: 1.25rem !important; }
+h1 { font-size: 1.8rem !important; padding-bottom: 0.5rem; }
+h3 { font-size: 1.2rem !important; }
 
 /* 3. 间距与留白 */
-[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1280px; }
+[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1200px; }
 
-/* 4. 组件样式 - 导航栏 */
+/* 4. 组件样式 - 顶部导航 (谷歌药丸状标签) */
 [data-testid="stPageLink-NavLink"] {
     background-color: #FFFFFF;
-    border-radius: 8px;
-    padding: 10px 20px;
-    border: 1px solid #E5E7EB;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border-radius: 24px;
+    padding: 8px 20px;
+    border: 1px solid #DADCE0;
     transition: all 0.2s ease;
     justify-content: center;
     font-weight: 500;
 }
 [data-testid="stPageLink-NavLink"]:hover {
-    border-color: #6B4EFF;
-    color: #6B4EFF !important;
+    background-color: #F1F3F4;
+    border-color: #DADCE0;
+}
+[data-testid="stPageLink-NavLink"] p {
+    color: #1A73E8 !important; /* 谷歌蓝 */
 }
 
-/* 4. 组件样式 - 按钮 */
+/* 4. 组件样式 - 按钮 (修复文字看不见的问题) */
 .stButton > button {
-    border-radius: 8px !important;
+    border-radius: 4px !important;
     border: none !important;
-    font-weight: 600 !important;
-    padding: 8px 16px !important;
+    font-weight: 500 !important;
+    padding: 8px 24px !important;
     transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"] {
-    background-color: #6B4EFF !important;
-    color: white !important;
-    box-shadow: 0 1px 2px rgba(107, 78, 255, 0.2) !important;
+    background-color: #1A73E8 !important; /* 谷歌蓝 */
+    box-shadow: none !important;
+}
+.stButton > button[kind="primary"] * {
+    color: #FFFFFF !important; /* 强制所有内部文字为白色 */
 }
 .stButton > button[kind="primary"]:hover {
-    background-color: #5A3DE0 !important;
-    transform: translateY(-1px);
+    background-color: #174EA6 !important;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
 }
 .stButton > button[kind="secondary"] {
     background: #FFFFFF !important;
-    color: #374151 !important;
-    border: 1px solid #D1D5DB !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    border: 1px solid #DADCE0 !important;
+}
+.stButton > button[kind="secondary"] * {
+    color: #1A73E8 !important; 
 }
 .stButton > button[kind="secondary"]:hover {
-    background: #F3F4F6 !important;
-    border-color: #9CA3AF !important;
+    background: #F1F3F4 !important;
 }
 
 /* 4. 组件样式 - 输入框、卡片、折叠面板 */
 .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
-    border-radius: 8px !important;
-    border: 1px solid #D1D5DB !important;
+    border-radius: 4px !important;
+    border: 1px solid #DADCE0 !important;
     background-color: #FFFFFF !important;
-    padding: 10px 12px !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    padding: 10px 14px !important;
 }
 .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
-    border-color: #6B4EFF !important;
-    box-shadow: 0 0 0 1px #6B4EFF !important;
+    border: 2px solid #1A73E8 !important;
+    padding: 9px 13px !important; 
+    box-shadow: none !important;
 }
 
 /* 卡片化区块 */
 [data-testid="stForm"], [data-testid="stExpander"] {
     background-color: #FFFFFF;
-    border-radius: 12px !important;
-    border: 1px solid #E5E7EB !important;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+    border-radius: 8px !important;
+    border: 1px solid #DADCE0 !important;
+    box-shadow: none !important;
     padding: 20px !important;
 }
 [data-testid="stAlert"] {
     border-radius: 8px !important;
-    border: 1px solid #E5E7EB !important;
+    border: 1px solid #DADCE0 !important;
     background-color: #FFFFFF !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-    border-left: 4px solid #6B4EFF !important;
+    border-left: 4px solid #1A73E8 !important;
 }
 
 /* Tabs 样式 */
-.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 2px solid #E5E7EB; padding-bottom: 0px; }
+.stTabs [data-baseweb="tab-list"] { gap: 16px; border-bottom: 1px solid #DADCE0; padding-bottom: 0px; }
 .stTabs [data-baseweb="tab"] {
     padding: 12px 16px !important;
     background-color: transparent;
     border: none !important;
-    color: #6B7280;
     font-weight: 500;
 }
 .stTabs [aria-selected="true"] {
-    color: #6B4EFF !important;
-    border-bottom: 2px solid #6B4EFF !important;
-    font-weight: 600;
+    border-bottom: 3px solid #1A73E8 !important;
+}
+.stTabs [aria-selected="true"] * {
+    color: #1A73E8 !important;
 }
 
-/* 隐藏侧边栏逻辑 */
-[data-testid="stSidebar"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -325,7 +324,6 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
 
 st.markdown("### 步骤 1：输入数据源获取商品图片")
 
-# 新增：与卡片生成器一致的双 Tab 数据抓取逻辑
 tab_b1, tab_b2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式"])
 
 with tab_b1:
@@ -461,7 +459,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
                         temp_html = []
                         for item in selected_items:
                             d = extract_basic_details(item["url"])
-                            if d: temp_html.append(f'<div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; display:flex;"><img src="{d.get("image_url")}" width="100" style="margin-right:15px;"><div><h4>{d.get("title")}</h4><p style="color:red; font-size:18px;"><b>{d.get("price")}</b></p><a href="{d.get("buy_link")}" target="_blank" style="background:#ff6f59; color:#fff; padding:8px 15px; text-decoration:none; border-radius:5px;">Buy Now</a></div></div>')
+                            if d: temp_html.append(f'<div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; display:flex;"><img src="{d.get("image_url")}" width="100" style="margin-right:15px;"><div><h4>{d.get("title")}</h4><p style="color:red; font-size:18px;"><b>{d.get("price")}</b></p><a href="{d.get("buy_link")}" target="_blank" style="background:#1A73E8; color:#fff; padding:8px 15px; text-decoration:none; border-radius:4px;">Buy Now</a></div></div>')
                         st.session_state.b_final_html = "\n".join(temp_html)
                 
                 with st.spinner(f"2/2 正在向 {selected_site_name} 推送中，这可能需要几十秒..."):
