@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
 import json
+import re
 from urllib.parse import urljoin
 from PIL import Image, ImageOps
 from io import BytesIO
@@ -10,109 +11,119 @@ from io import BytesIO
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
 
-# 🎨 核心 UI 视觉重构：柔和玫瑰 / 优雅便当盒风格
+# 🎨 核心 UI 视觉重构：SaaS 仪表盘 / 科技紫风格
 st.markdown("""
 <style>
-/* 1. 全局配色与背景 (Background & Text) */
+/* 1. 全局配色与背景 */
 .stApp {
-    background-color: #FCF7F8;
-    color: #4A3C3E;
-    font-family: 'Nunito', -apple-system, sans-serif;
+    background-color: #F9FAFB;
+    color: #111827;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
-p, span, div, label {
-    color: #4A3C3E !important;
-}
+p, span, label { color: #4B5563 !important; }
 
-/* 2. 字体排版 (Typography) */
-h1, h2, h3 {
-    font-family: 'Georgia', 'Playfair Display', serif !important;
-    color: #2D2325 !important;
-    letter-spacing: 0.5px;
+/* 2. 字体排版 (无衬线, 现代感) */
+h1, h2, h3, h4 {
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    color: #111827 !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
 }
-h1 { font-size: 2.2rem !important; margin-bottom: 1.5rem !important; }
-h3 { font-size: 1.3rem !important; margin-top: 1rem !important; }
+h1 { font-size: 2rem !important; padding-bottom: 0.5rem; }
+h3 { font-size: 1.25rem !important; }
 
-/* 3. 间距与留白 (Spacing & Layout) */
-[data-testid="block-container"] {
-    padding-top: 2.5rem !important;
-    padding-bottom: 4rem !important;
-    max-width: 1200px;
-}
+/* 3. 间距与留白 */
+[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1280px; }
 
-/* 4. 组件样式 - 导航栏 (Navigation) */
+/* 4. 组件样式 - 导航栏 */
 [data-testid="stPageLink-NavLink"] {
     background-color: #FFFFFF;
-    border-radius: 50px;
-    padding: 12px 24px;
-    border: 1px solid #F3E1E4;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05);
-    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 10px 20px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
     justify-content: center;
+    font-weight: 500;
 }
 [data-testid="stPageLink-NavLink"]:hover {
-    border-color: #E58A9A;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(229, 138, 154, 0.12);
+    border-color: #6B4EFF;
+    color: #6B4EFF !important;
 }
 
-/* 4. 组件样式 - 按钮 (Buttons) */
+/* 4. 组件样式 - 按钮 */
 .stButton > button {
-    border-radius: 50px !important;
+    border-radius: 8px !important;
     border: none !important;
     font-weight: 600 !important;
-    padding: 8px 24px !important;
-    transition: all 0.3s ease !important;
+    padding: 8px 16px !important;
+    transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #F1A7B8 0%, #E58A9A 100%) !important;
+    background-color: #6B4EFF !important;
     color: white !important;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.3) !important;
+    box-shadow: 0 1px 2px rgba(107, 78, 255, 0.2) !important;
 }
 .stButton > button[kind="primary"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(229, 138, 154, 0.4) !important;
+    background-color: #5A3DE0 !important;
+    transform: translateY(-1px);
 }
 .stButton > button[kind="secondary"] {
     background: #FFFFFF !important;
-    color: #E58A9A !important;
-    border: 1px solid #F3E1E4 !important;
-    box-shadow: 0 2px 8px rgba(229, 138, 154, 0.05) !important;
+    color: #374151 !important;
+    border: 1px solid #D1D5DB !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 .stButton > button[kind="secondary"]:hover {
-    background: #FFF5F7 !important;
-    border-color: #E58A9A !important;
+    background: #F3F4F6 !important;
+    border-color: #9CA3AF !important;
 }
 
-/* 4. 组件样式 - 输入框与卡片 (Inputs & Bento Cards) */
+/* 4. 组件样式 - 输入框、卡片、折叠面板 */
 .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
-    border-radius: 16px !important;
-    border: 1px solid #EADDDF !important;
+    border-radius: 8px !important;
+    border: 1px solid #D1D5DB !important;
     background-color: #FFFFFF !important;
-    padding: 10px 16px !important;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    padding: 10px 12px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
-    border-color: #E58A9A !important;
-    box-shadow: 0 0 0 1px #E58A9A !important;
+    border-color: #6B4EFF !important;
+    box-shadow: 0 0 0 1px #6B4EFF !important;
 }
 
-/* 卡片化区块 (Form, Expander, Alert) */
+/* 卡片化区块 */
 [data-testid="stForm"], [data-testid="stExpander"] {
     background-color: #FFFFFF;
-    border-radius: 24px !important;
-    border: 1px solid #F3E1E4 !important;
-    box-shadow: 0 10px 40px rgba(229, 138, 154, 0.06) !important;
+    border-radius: 12px !important;
+    border: 1px solid #E5E7EB !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
     padding: 20px !important;
 }
 [data-testid="stAlert"] {
-    border-radius: 16px !important;
-    border: none !important;
+    border-radius: 8px !important;
+    border: 1px solid #E5E7EB !important;
     background-color: #FFFFFF !important;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05) !important;
-    border-left: 4px solid #E58A9A !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    border-left: 4px solid #6B4EFF !important;
 }
 
-/* 隐藏侧边栏逻辑保持不变 */
+/* Tabs 样式 */
+.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 2px solid #E5E7EB; padding-bottom: 0px; }
+.stTabs [data-baseweb="tab"] {
+    padding: 12px 16px !important;
+    background-color: transparent;
+    border: none !important;
+    color: #6B7280;
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    color: #6B4EFF !important;
+    border-bottom: 2px solid #6B4EFF !important;
+    font-weight: 600;
+}
+
+/* 隐藏侧边栏逻辑 */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 </style>
@@ -142,7 +153,7 @@ if "b_urls" not in st.session_state: st.session_state.b_urls = []
 if "b_banner_bytes" not in st.session_state: st.session_state.b_banner_bytes = None
 if "b_final_html" not in st.session_state: st.session_state.b_final_html = ""
 
-dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
+dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 def get_soup(url):
     try:
@@ -150,6 +161,64 @@ def get_soup(url):
         response.raise_for_status()
         return BeautifulSoup(response.text, 'lxml')
     except: return None
+
+def fetch_blog_context(blog_url):
+    soup = get_soup(blog_url)
+    if not soup: return ""
+    return soup.get_text(separator='\n', strip=True)[:4000]
+
+def fetch_product_list(category_url):
+    soup = get_soup(category_url)
+    if not soup: return []
+    seen_urls = set()
+    products = []
+    for a in soup.find_all('a', href=True):
+        title = a.get_text(strip=True)
+        href = a['href']
+        full_url = urljoin(category_url, href)
+        clean_url = full_url.split('?')[0]
+        if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
+            img = a.find('img')
+            if not img and a.parent: img = a.parent.find('img')
+            if not img and a.parent and a.parent.parent: img = a.parent.parent.find('img')
+            if img:
+                src = img.get('data-src') or img.get('src')
+                if src:
+                    img_url = urljoin(category_url, src).split('?')[0]
+                    seen_urls.add(clean_url)
+                    products.append({"title": title, "url": clean_url, "thumbnail": img_url})
+                    if len(products) >= 60: break
+    return products
+
+def clean_json_response(content):
+    content = content.strip()
+    if content.startswith("```"):
+        start_idx = content.find('\n') + 1
+        end_idx = content.rfind('```')
+        if start_idx > 0 and end_idx > start_idx:
+            content = content[start_idx:end_idx].strip()
+    return content
+
+def ai_match_top_30(blog_text, product_list):
+    prompt = f"""
+    You are an expert e-commerce recommender.
+    I will provide a Blog Post content and a list of product candidates.
+    CRITICAL INSTRUCTION: Select and return AS MANY relevant products as possible, up to a maximum of 30. 
+    Blog Post: {blog_text[:3000]}
+    Product Candidates: {json.dumps(product_list, ensure_ascii=False)}
+    Output ONLY a JSON array of the selected products.
+    """
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"} if "json" in prompt.lower() else None,
+            max_tokens=4000
+        )
+        result_text = clean_json_response(response.choices[0].message.content)
+        return json.loads(result_text)
+    except:
+        return product_list[:30]
 
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
@@ -216,7 +285,6 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
     media_id = None
     media_url = ""
     
-    # 1. 上传 Banner 进媒体库
     if banner_bytes:
         headers = {'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}
         try:
@@ -232,12 +300,10 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
     if media_url:
         html_content = f'<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>' + html_content
 
-    # 2. 组装文章数据
     post_data = {'content': html_content}
     if media_id: 
-        post_data['featured_media'] = media_id # 设置为特色图片
+        post_data['featured_media'] = media_id 
         
-    # 3. 推送逻辑
     try:
         if post_id.strip():
             if title: post_data['title'] = title
@@ -257,16 +323,55 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
 
 # ================= UI 布局 =================
 
-st.markdown("### 步骤 1：输入商品链接")
-b_direct_urls = st.text_area("直接填入商品链接提取图片 (一行一个)：", height=150)
-if st.button("🚀 获取商品图片", type="primary"):
-    if b_direct_urls.strip():
-        with st.spinner("正在解析图片..."):
-            st.session_state.b_pool = fetch_direct_urls(b_direct_urls)
-            st.session_state.b_step = 2
-            st.session_state.b_final_html = ""
-            st.session_state.b_banner_bytes = None
-            st.rerun()
+st.markdown("### 步骤 1：输入数据源获取商品图片")
+
+# 新增：与卡片生成器一致的双 Tab 数据抓取逻辑
+tab_b1, tab_b2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式"])
+
+with tab_b1:
+    col1, col2 = st.columns(2)
+    with col1: b_blog_url = st.text_input("博客文章链接", placeholder="用于语义匹配分析", key="b_blog")
+    with col2: b_shop_url = st.text_input("商品列表页链接", placeholder="用于抓取候选商品", key="b_shop")
+    
+    if st.button("🔍 抓取并智能海选", type="primary", key="b_btn_ai"):
+        if not b_blog_url or not b_shop_url: st.warning("请填写完整的两个链接！")
+        else:
+            with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
+                blog_text = fetch_blog_context(b_blog_url)
+                raw_pool = fetch_product_list(b_shop_url)
+            if not raw_pool: st.error("未能抓取到有效图片，请检查链接。")
+            else:
+                with st.spinner(f"2/2 已抓取 {len(raw_pool)} 个含图商品，正在请求 AI 海选..."):
+                    matched = ai_match_top_30(blog_text, raw_pool)
+                    extracted = []
+                    if isinstance(matched, dict):
+                        for val in matched.values():
+                            if isinstance(val, list): extracted = val; break
+                        matched = extracted if extracted else [matched]
+                    valid_pool = []
+                    if isinstance(matched, list):
+                        for item in matched:
+                            if isinstance(item, dict) and "url" in item:
+                                if "thumbnail" not in item: item["thumbnail"] = dummy_image
+                                valid_pool.append(item)
+                    if valid_pool:
+                        st.session_state.b_pool = valid_pool
+                        st.session_state.b_step = 2
+                        st.session_state.b_final_html = ""
+                        st.session_state.b_banner_bytes = None
+                        st.rerun()
+
+with tab_b2:
+    st.info("💡 直接填入商品链接提取图片 (一行一个)")
+    b_direct_urls = st.text_area("输入商品链接：", height=150)
+    if st.button("🚀 获取商品图片", type="primary", key="b_btn_direct"):
+        if b_direct_urls.strip():
+            with st.spinner("正在解析图片..."):
+                st.session_state.b_pool = fetch_direct_urls(b_direct_urls)
+                st.session_state.b_step = 2
+                st.session_state.b_final_html = ""
+                st.session_state.b_banner_bytes = None
+                st.rerun()
 
 if st.session_state.b_step >= 2 and st.session_state.b_pool:
     st.markdown("---")
