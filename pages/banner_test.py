@@ -10,9 +10,109 @@ from io import BytesIO
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
 
-# 彻底隐藏左侧边栏
+# 🎨 核心 UI 视觉重构：柔和玫瑰 / 优雅便当盒风格
 st.markdown("""
 <style>
+/* 1. 全局配色与背景 (Background & Text) */
+.stApp {
+    background-color: #FCF7F8;
+    color: #4A3C3E;
+    font-family: 'Nunito', -apple-system, sans-serif;
+}
+p, span, div, label {
+    color: #4A3C3E !important;
+}
+
+/* 2. 字体排版 (Typography) */
+h1, h2, h3 {
+    font-family: 'Georgia', 'Playfair Display', serif !important;
+    color: #2D2325 !important;
+    letter-spacing: 0.5px;
+}
+h1 { font-size: 2.2rem !important; margin-bottom: 1.5rem !important; }
+h3 { font-size: 1.3rem !important; margin-top: 1rem !important; }
+
+/* 3. 间距与留白 (Spacing & Layout) */
+[data-testid="block-container"] {
+    padding-top: 2.5rem !important;
+    padding-bottom: 4rem !important;
+    max-width: 1200px;
+}
+
+/* 4. 组件样式 - 导航栏 (Navigation) */
+[data-testid="stPageLink-NavLink"] {
+    background-color: #FFFFFF;
+    border-radius: 50px;
+    padding: 12px 24px;
+    border: 1px solid #F3E1E4;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05);
+    transition: all 0.3s ease;
+    justify-content: center;
+}
+[data-testid="stPageLink-NavLink"]:hover {
+    border-color: #E58A9A;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(229, 138, 154, 0.12);
+}
+
+/* 4. 组件样式 - 按钮 (Buttons) */
+.stButton > button {
+    border-radius: 50px !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 8px 24px !important;
+    transition: all 0.3s ease !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #F1A7B8 0%, #E58A9A 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.3) !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(229, 138, 154, 0.4) !important;
+}
+.stButton > button[kind="secondary"] {
+    background: #FFFFFF !important;
+    color: #E58A9A !important;
+    border: 1px solid #F3E1E4 !important;
+    box-shadow: 0 2px 8px rgba(229, 138, 154, 0.05) !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    background: #FFF5F7 !important;
+    border-color: #E58A9A !important;
+}
+
+/* 4. 组件样式 - 输入框与卡片 (Inputs & Bento Cards) */
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
+    border-radius: 16px !important;
+    border: 1px solid #EADDDF !important;
+    background-color: #FFFFFF !important;
+    padding: 10px 16px !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
+    border-color: #E58A9A !important;
+    box-shadow: 0 0 0 1px #E58A9A !important;
+}
+
+/* 卡片化区块 (Form, Expander, Alert) */
+[data-testid="stForm"], [data-testid="stExpander"] {
+    background-color: #FFFFFF;
+    border-radius: 24px !important;
+    border: 1px solid #F3E1E4 !important;
+    box-shadow: 0 10px 40px rgba(229, 138, 154, 0.06) !important;
+    padding: 20px !important;
+}
+[data-testid="stAlert"] {
+    border-radius: 16px !important;
+    border: none !important;
+    background-color: #FFFFFF !important;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05) !important;
+    border-left: 4px solid #E58A9A !important;
+}
+
+/* 隐藏侧边栏逻辑保持不变 */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 </style>
@@ -24,7 +124,7 @@ with nav_col1:
     st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
 with nav_col2:
     st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
@@ -124,12 +224,11 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
             if res_media.status_code in [200, 201]: 
                 media_data = res_media.json()
                 media_id = media_data.get('id')
-                media_url = media_data.get('source_url') # 获取上传后的真实图片链接
+                media_url = media_data.get('source_url')
             else: 
                 return False, f"图片上传失败: {res_media.text}"
         except Exception as e: return False, f"图片上传异常: {e}"
             
-    # 核心体验升级：将上传好的 Banner 图片，强行插入到正文的最上方！
     if media_url:
         html_content = f'<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>' + html_content
 
@@ -138,15 +237,13 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
     if media_id: 
         post_data['featured_media'] = media_id # 设置为特色图片
         
-    # 3. 推送逻辑（区分新建与更新）
+    # 3. 推送逻辑
     try:
         if post_id.strip():
-            # 更新已存在的文章 (使用目标 ID)
             if title: post_data['title'] = title
             res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=post_data, auth=auth, timeout=30)
             action_text = "更新特定文章"
         else:
-            # 新建草稿
             post_data['title'] = title
             post_data['status'] = 'draft'
             res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
