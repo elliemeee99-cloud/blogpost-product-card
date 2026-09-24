@@ -9,13 +9,127 @@ from urllib.parse import urljoin
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
-# 彻底隐藏左侧边栏，保留 100% 宽屏空间
+# 🎨 核心 UI 视觉重构：柔和玫瑰 / 优雅便当盒风格
 st.markdown("""
 <style>
+/* 1. 全局配色与背景 (Background & Text) */
+.stApp {
+    background-color: #FCF7F8;
+    color: #4A3C3E;
+    font-family: 'Nunito', -apple-system, sans-serif;
+}
+p, span, div, label {
+    color: #4A3C3E !important;
+}
+
+/* 2. 字体排版 (Typography) */
+h1, h2, h3 {
+    font-family: 'Georgia', 'Playfair Display', serif !important;
+    color: #2D2325 !important;
+    letter-spacing: 0.5px;
+}
+h1 { font-size: 2.2rem !important; margin-bottom: 1.5rem !important; }
+h3 { font-size: 1.3rem !important; margin-top: 1rem !important; }
+
+/* 3. 间距与留白 (Spacing & Layout) */
+[data-testid="block-container"] {
+    padding-top: 2.5rem !important;
+    padding-bottom: 4rem !important;
+    max-width: 1200px;
+}
+
+/* 4. 组件样式 - 导航栏 (Navigation) */
+[data-testid="stPageLink-NavLink"] {
+    background-color: #FFFFFF;
+    border-radius: 50px;
+    padding: 12px 24px;
+    border: 1px solid #F3E1E4;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05);
+    transition: all 0.3s ease;
+    justify-content: center;
+}
+[data-testid="stPageLink-NavLink"]:hover {
+    border-color: #E58A9A;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(229, 138, 154, 0.12);
+}
+
+/* 4. 组件样式 - 按钮 (Buttons) */
+.stButton > button {
+    border-radius: 50px !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 8px 24px !important;
+    transition: all 0.3s ease !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #F1A7B8 0%, #E58A9A 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.3) !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(229, 138, 154, 0.4) !important;
+}
+.stButton > button[kind="secondary"] {
+    background: #FFFFFF !important;
+    color: #E58A9A !important;
+    border: 1px solid #F3E1E4 !important;
+    box-shadow: 0 2px 8px rgba(229, 138, 154, 0.05) !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    background: #FFF5F7 !important;
+    border-color: #E58A9A !important;
+}
+
+/* 4. 组件样式 - 输入框与卡片 (Inputs & Bento Cards) */
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
+    border-radius: 16px !important;
+    border: 1px solid #EADDDF !important;
+    background-color: #FFFFFF !important;
+    padding: 10px 16px !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
+    border-color: #E58A9A !important;
+    box-shadow: 0 0 0 1px #E58A9A !important;
+}
+
+/* 卡片化区块 (Form, Expander, Alert) */
+[data-testid="stForm"], [data-testid="stExpander"] {
+    background-color: #FFFFFF;
+    border-radius: 24px !important;
+    border: 1px solid #F3E1E4 !important;
+    box-shadow: 0 10px 40px rgba(229, 138, 154, 0.06) !important;
+    padding: 20px !important;
+}
+[data-testid="stAlert"] {
+    border-radius: 16px !important;
+    border: none !important;
+    background-color: #FFFFFF !important;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05) !important;
+    border-left: 4px solid #E58A9A !important;
+}
+
+/* Tabs 圆润化 */
+.stTabs [data-baseweb="tab-list"] { gap: 16px; }
+.stTabs [data-baseweb="tab"] {
+    padding: 10px 24px !important;
+    border-radius: 50px !important;
+    background-color: transparent;
+    border: 1px solid transparent !important;
+}
+.stTabs [aria-selected="true"] {
+    background-color: #FFFFFF !important;
+    color: #E58A9A !important;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.08);
+    border: 1px solid #F3E1E4 !important;
+}
+
+/* 隐藏侧边栏逻辑保持不变 */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
-[data-testid="stTooltipIcon"] svg { display: none !important; }
-[data-testid="stTooltipIcon"]::after { content: "ⓘ"; font-size: 16px; color: #888; margin-left: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -25,7 +139,7 @@ with nav_col1:
     st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
 with nav_col2:
     st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.title("🛍️ 博客商品卡片自动生成器 (GEO响应式版)")
 
@@ -415,7 +529,7 @@ with tab1:
     with col1: blog_url = st.text_input("博客文章链接 (Blog Post URL)", placeholder="用于语义匹配分析")
     with col2: shop_url = st.text_input("商品列表页/着陆页链接 (Landing Page)", placeholder="用于抓取候选商品")
     
-    if st.button("🔍 抓取并智能海选"):
+    if st.button("🔍 抓取并智能海选", type="primary"):
         if not blog_url or not shop_url: st.warning("请填写完整的两个链接！")
         else:
             with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
@@ -444,7 +558,7 @@ with tab1:
 with tab2:
     st.info("💡 如果不需要给 Blog 找对应的商品，请直接在下方粘贴商品详情页链接。一行一个。")
     direct_urls = st.text_area("输入商品链接：", placeholder="https://example.com/product-1\nhttps://example.com/product-2", height=150)
-    if st.button("🚀 直接获取这些商品信息"):
+    if st.button("🚀 直接获取这些商品信息", type="primary"):
         if not direct_urls.strip(): st.warning("请至少输入一个链接！")
         else:
             with st.spinner("正在解析您提供的链接，请稍候..."):
@@ -550,7 +664,6 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
                     st.caption("👁️ 视觉预览 (响应式)")
                     st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
                 with col_right:
-                    # 重新启用默认隐藏的折叠面板组件！
                     with st.expander("💻 点击展开 / 复制完整 HTML 代码"):
                         st.code(card_html, language='html')
                 st.write("---") 
@@ -571,7 +684,6 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             st.caption("👁️ 视觉预览 (响应式，可横向滑动)")
             st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
         with col_right:
-            # 重新启用默认隐藏的折叠面板组件！
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"):
                 st.code(final_carousel_html, language='html')
                 
