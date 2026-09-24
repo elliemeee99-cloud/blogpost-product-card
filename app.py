@@ -9,125 +9,119 @@ from urllib.parse import urljoin
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
-# 🎨 核心 UI 视觉重构：柔和玫瑰 / 优雅便当盒风格
+# 🎨 核心 UI 视觉重构：SaaS 仪表盘 / 科技紫风格
 st.markdown("""
 <style>
-/* 1. 全局配色与背景 (Background & Text) */
+/* 1. 全局配色与背景 */
 .stApp {
-    background-color: #FCF7F8;
-    color: #4A3C3E;
-    font-family: 'Nunito', -apple-system, sans-serif;
+    background-color: #F9FAFB;
+    color: #111827;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
-p, span, div, label {
-    color: #4A3C3E !important;
-}
+p, span, label { color: #4B5563 !important; }
 
-/* 2. 字体排版 (Typography) */
-h1, h2, h3 {
-    font-family: 'Georgia', 'Playfair Display', serif !important;
-    color: #2D2325 !important;
-    letter-spacing: 0.5px;
+/* 2. 字体排版 (无衬线, 现代感) */
+h1, h2, h3, h4 {
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    color: #111827 !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
 }
-h1 { font-size: 2.2rem !important; margin-bottom: 1.5rem !important; }
-h3 { font-size: 1.3rem !important; margin-top: 1rem !important; }
+h1 { font-size: 2rem !important; padding-bottom: 0.5rem; }
+h3 { font-size: 1.25rem !important; }
 
-/* 3. 间距与留白 (Spacing & Layout) */
-[data-testid="block-container"] {
-    padding-top: 2.5rem !important;
-    padding-bottom: 4rem !important;
-    max-width: 1200px;
-}
+/* 3. 间距与留白 */
+[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1280px; }
 
-/* 4. 组件样式 - 导航栏 (Navigation) */
+/* 4. 组件样式 - 导航栏 */
 [data-testid="stPageLink-NavLink"] {
     background-color: #FFFFFF;
-    border-radius: 50px;
-    padding: 12px 24px;
-    border: 1px solid #F3E1E4;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05);
-    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 10px 20px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
     justify-content: center;
+    font-weight: 500;
 }
 [data-testid="stPageLink-NavLink"]:hover {
-    border-color: #E58A9A;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(229, 138, 154, 0.12);
+    border-color: #6B4EFF;
+    color: #6B4EFF !important;
 }
 
-/* 4. 组件样式 - 按钮 (Buttons) */
+/* 4. 组件样式 - 按钮 */
 .stButton > button {
-    border-radius: 50px !important;
+    border-radius: 8px !important;
     border: none !important;
     font-weight: 600 !important;
-    padding: 8px 24px !important;
-    transition: all 0.3s ease !important;
+    padding: 8px 16px !important;
+    transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #F1A7B8 0%, #E58A9A 100%) !important;
+    background-color: #6B4EFF !important;
     color: white !important;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.3) !important;
+    box-shadow: 0 1px 2px rgba(107, 78, 255, 0.2) !important;
 }
 .stButton > button[kind="primary"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(229, 138, 154, 0.4) !important;
+    background-color: #5A3DE0 !important;
+    transform: translateY(-1px);
 }
 .stButton > button[kind="secondary"] {
     background: #FFFFFF !important;
-    color: #E58A9A !important;
-    border: 1px solid #F3E1E4 !important;
-    box-shadow: 0 2px 8px rgba(229, 138, 154, 0.05) !important;
+    color: #374151 !important;
+    border: 1px solid #D1D5DB !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 .stButton > button[kind="secondary"]:hover {
-    background: #FFF5F7 !important;
-    border-color: #E58A9A !important;
+    background: #F3F4F6 !important;
+    border-color: #9CA3AF !important;
 }
 
-/* 4. 组件样式 - 输入框与卡片 (Inputs & Bento Cards) */
+/* 4. 组件样式 - 输入框、卡片、折叠面板 */
 .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
-    border-radius: 16px !important;
-    border: 1px solid #EADDDF !important;
+    border-radius: 8px !important;
+    border: 1px solid #D1D5DB !important;
     background-color: #FFFFFF !important;
-    padding: 10px 16px !important;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    padding: 10px 12px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
-    border-color: #E58A9A !important;
-    box-shadow: 0 0 0 1px #E58A9A !important;
+    border-color: #6B4EFF !important;
+    box-shadow: 0 0 0 1px #6B4EFF !important;
 }
 
-/* 卡片化区块 (Form, Expander, Alert) */
+/* 卡片化区块 */
 [data-testid="stForm"], [data-testid="stExpander"] {
     background-color: #FFFFFF;
-    border-radius: 24px !important;
-    border: 1px solid #F3E1E4 !important;
-    box-shadow: 0 10px 40px rgba(229, 138, 154, 0.06) !important;
+    border-radius: 12px !important;
+    border: 1px solid #E5E7EB !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
     padding: 20px !important;
 }
 [data-testid="stAlert"] {
-    border-radius: 16px !important;
-    border: none !important;
+    border-radius: 8px !important;
+    border: 1px solid #E5E7EB !important;
     background-color: #FFFFFF !important;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.05) !important;
-    border-left: 4px solid #E58A9A !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    border-left: 4px solid #6B4EFF !important;
 }
 
-/* Tabs 圆润化 */
-.stTabs [data-baseweb="tab-list"] { gap: 16px; }
+/* Tabs 样式 */
+.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 2px solid #E5E7EB; padding-bottom: 0px; }
 .stTabs [data-baseweb="tab"] {
-    padding: 10px 24px !important;
-    border-radius: 50px !important;
+    padding: 12px 16px !important;
     background-color: transparent;
-    border: 1px solid transparent !important;
+    border: none !important;
+    color: #6B7280;
+    font-weight: 500;
 }
 .stTabs [aria-selected="true"] {
-    background-color: #FFFFFF !important;
-    color: #E58A9A !important;
-    font-weight: bold;
-    box-shadow: 0 4px 15px rgba(229, 138, 154, 0.08);
-    border: 1px solid #F3E1E4 !important;
+    color: #6B4EFF !important;
+    border-bottom: 2px solid #6B4EFF !important;
+    font-weight: 600;
 }
 
-/* 隐藏侧边栏逻辑保持不变 */
+/* 隐藏侧边栏逻辑 */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 </style>
@@ -155,7 +149,7 @@ if "step" not in st.session_state: st.session_state.step = 1
 if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 
-dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F7E8D5%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%233E2723%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
+dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
 # ================= HTML 响应式模板库 =================
 templates = {
@@ -522,7 +516,7 @@ def generate_carousel_json_ld(products_data):
 
 st.markdown("### 步骤 1：输入数据源")
 
-tab1, tab2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式 (直接填链接)"])
+tab1, tab2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式"])
 
 with tab1:
     col1, col2 = st.columns(2)
@@ -608,7 +602,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
                 preview_html = tmpl_data["html"].format(**dummy_data)
             
             preview_wrapper = f"""
-            <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #f0f0f0; border-radius: 8px; padding: 10px; background: #fff;">
+            <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px; background: #fff;">
                 <div style="transform: scale(0.75); transform-origin: top left; width: 133%;">
                     {preview_html}
                 </div>
