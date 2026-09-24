@@ -255,7 +255,7 @@ def extract_product_details(product_url):
         return result
     except: return None
 
-# ================= 结构化数据与双重隐形锁 =================
+# ================= 结构化数据 =================
 def format_price_for_schema(price_str):
     if not price_str: return "0.00"
     p = str(price_str).replace(',', '.') 
@@ -272,7 +272,6 @@ def generate_single_json_ld(title, image_url, price, buy_link, return_days):
         "@context": "https://schema.org/", "@type": "Product", "name": title[:140], "image": image_url, "brand": {"@type": "Brand", "name": "Callie"},
         "offers": {"@type": "Offer", "price": price_num, "priceCurrency": currency, "url": buy_link, "availability": "https://schema.org/InStock"}
     }
-    # 彻底解决乱码问题：使用 display:none 的隐形 div 强制包裹脚本，避免 WP 将其渲染为文本
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 def generate_carousel_json_ld(products_data):
@@ -287,7 +286,7 @@ def generate_carousel_json_ld(products_data):
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
-# ================= WordPress 智能注入函数 (重构为纯粹正则替换) =================
+# ================= WordPress 智能注入函数 (修复静默失败版) =================
 def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
@@ -298,20 +297,20 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
         current_content = post_data.get('content', {}).get('raw', '')
     except Exception as e: return False, f"读取异常: {e}"
 
-    # 包装为标准的 Custom HTML 区块，防止 WP 篡改样式
+    # 标准化包装 HTML，保证在 Gutenberg 编辑器中不报错
     formatted_cards = [f'\n<!-- wp:html -->\n{card}\n<!-- /wp:html -->\n' for card in cards_html_list]
-
-    # 使用正则切割：避免 BeautifulSoup 破坏 Gutenberg 原本的区块注释代码
-    parts = re.split(r'(<h2[^>]*>)', current_content, flags=re.IGNORECASE)
+    
+    # 核心修复点：不要切断 wp:heading 内部！将卡片安全地插入整个区块的外层。
+    parts = re.split(r'(<!--\s*wp:heading[^>]*-->\s*<h2[^>]*>|<h2[^>]*>)', current_content, flags=re.IGNORECASE)
     
     new_content = ""
     card_idx = 0
-    
     if len(parts) == 1:
         new_content = current_content + "".join(formatted_cards)
     else:
         for part in parts:
-            if part.lower().startswith('<h2'):
+            part_lower = part.strip().lower()
+            if part_lower.startswith('<h2') or part_lower.startswith('<!-- wp:heading'):
                 if card_idx < len(formatted_cards):
                     new_content += formatted_cards[card_idx]
                     card_idx += 1
@@ -323,7 +322,7 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     update_data = {'content': new_content}
     try:
         res_update = requests.post(f"{base_api}/posts/{post_id}", json=update_data, auth=auth, timeout=30)
-        if res_update.status_code in [200, 201]: return True, f"成功注入 {len(cards_html_list)} 个模块！"
+        if res_update.status_code in [200, 201]: return True, f"成功无损注入 {len(cards_html_list)} 个模块！"
         else: return False, f"更新失败: {res_update.text}"
     except Exception as e: return False, f"更新异常: {e}"
 
@@ -476,17 +475,22 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
+        # 恢复单账号安全加载逻辑
+        user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
-        if "WP_USER" in st.secrets and pass_key in st.secrets:
+        
+        if user_key in st.secrets and pass_key in st.secrets:
             st.success(f"🔒 凭证已加载")
-            wp_user, wp_pass = st.secrets["WP_USER"], st.secrets[pass_key]
+            wp_user = st.secrets[user_key]
+            wp_pass = st.secrets[pass_key]
         else:
-            st.warning(f"⚠️ 缺少 {pass_key}")
+            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
             c1, c2 = st.columns(2)
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
-            with c2: wp_pass = st.text_input(f"应用密码", type="password")
+            with c2: wp_pass = st.text_input(f"应用密码 (缺少 {pass_key})", type="password")
             
         target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。")
+        
         if st.button("🚀 开始无损注入并更新", type="primary"):
             if not target_post_id.strip() or not wp_user or not wp_pass: st.warning("请确保 ID 与验证信息完整！")
             else:
