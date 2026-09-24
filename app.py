@@ -12,118 +12,35 @@ st.set_page_config(page_title="智能商品卡片生成器", layout="wide", init
 # 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
-/* 1. 谷歌全局配色与背景 */
-.stApp {
-    background-color: #F8F9FA;
-    color: #202124;
-    font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
-}
+.stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
 p, span, label { color: #5F6368 !important; }
-
-/* 2. 字体排版 */
-h1, h2, h3, h4 {
-    font-family: 'Google Sans', 'Roboto', sans-serif !important;
-    color: #202124 !important;
-    font-weight: 500 !important;
-}
+h1, h2, h3, h4 { font-family: 'Google Sans', 'Roboto', sans-serif !important; color: #202124 !important; font-weight: 500 !important; }
 h1 { font-size: 1.8rem !important; padding-bottom: 0.5rem; }
 h3 { font-size: 1.2rem !important; }
-
-/* 3. 间距与留白 */
 [data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1200px; }
 
-/* 4. 组件样式 - 顶部导航 */
-[data-testid="stPageLink-NavLink"] {
-    background-color: #FFFFFF;
-    border-radius: 24px;
-    padding: 8px 20px;
-    border: 1px solid #DADCE0;
-    transition: all 0.2s ease;
-    justify-content: center;
-    font-weight: 500;
-}
-[data-testid="stPageLink-NavLink"]:hover {
-    background-color: #F1F3F4;
-    border-color: #DADCE0;
-}
-[data-testid="stPageLink-NavLink"] p {
-    color: #1A73E8 !important; 
-}
+[data-testid="stPageLink-NavLink"] { background-color: #FFFFFF; border-radius: 24px; padding: 8px 20px; border: 1px solid #DADCE0; transition: all 0.2s ease; justify-content: center; font-weight: 500; }
+[data-testid="stPageLink-NavLink"]:hover { background-color: #F1F3F4; border-color: #DADCE0; }
+[data-testid="stPageLink-NavLink"] p { color: #1A73E8 !important; }
 
-/* 4. 组件样式 - 按钮 */
-.stButton > button {
-    border-radius: 4px !important;
-    border: none !important;
-    font-weight: 500 !important;
-    padding: 8px 24px !important;
-    transition: all 0.2s ease !important;
-}
-.stButton > button[kind="primary"] {
-    background-color: #1A73E8 !important; 
-    box-shadow: none !important;
-}
-.stButton > button[kind="primary"] * {
-    color: #FFFFFF !important; 
-}
-.stButton > button[kind="primary"]:hover {
-    background-color: #174EA6 !important;
-    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
-}
-.stButton > button[kind="secondary"] {
-    background: #FFFFFF !important;
-    border: 1px solid #DADCE0 !important;
-}
-.stButton > button[kind="secondary"] * {
-    color: #1A73E8 !important; 
-}
-.stButton > button[kind="secondary"]:hover {
-    background: #F1F3F4 !important;
-}
+.stButton > button { border-radius: 4px !important; border: none !important; font-weight: 500 !important; padding: 8px 24px !important; transition: all 0.2s ease !important; }
+.stButton > button[kind="primary"] { background-color: #1A73E8 !important; box-shadow: none !important; }
+.stButton > button[kind="primary"] * { color: #FFFFFF !important; }
+.stButton > button[kind="primary"]:hover { background-color: #174EA6 !important; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important; }
+.stButton > button[kind="secondary"] { background: #FFFFFF !important; border: 1px solid #DADCE0 !important; }
+.stButton > button[kind="secondary"] * { color: #1A73E8 !important; }
+.stButton > button[kind="secondary"]:hover { background: #F1F3F4 !important; }
 
-/* 4. 组件样式 - 输入框、卡片、折叠面板 */
-.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
-    border-radius: 4px !important;
-    border: 1px solid #DADCE0 !important;
-    background-color: #FFFFFF !important;
-    padding: 10px 14px !important;
-}
-.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
-    border: 2px solid #1A73E8 !important;
-    padding: 9px 13px !important; 
-    box-shadow: none !important;
-}
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div { border-radius: 4px !important; border: 1px solid #DADCE0 !important; background-color: #FFFFFF !important; padding: 10px 14px !important; }
+.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus { border: 2px solid #1A73E8 !important; padding: 9px 13px !important; box-shadow: none !important; }
+[data-testid="stForm"], [data-testid="stExpander"] { background-color: #FFFFFF; border-radius: 8px !important; border: 1px solid #DADCE0 !important; box-shadow: none !important; padding: 20px !important; }
+[data-testid="stAlert"] { border-radius: 8px !important; border: 1px solid #DADCE0 !important; background-color: #FFFFFF !important; border-left: 4px solid #1A73E8 !important; }
 
-/* 卡片化区块 */
-[data-testid="stForm"], [data-testid="stExpander"] {
-    background-color: #FFFFFF;
-    border-radius: 8px !important;
-    border: 1px solid #DADCE0 !important;
-    box-shadow: none !important;
-    padding: 20px !important;
-}
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    border: 1px solid #DADCE0 !important;
-    background-color: #FFFFFF !important;
-    border-left: 4px solid #1A73E8 !important;
-}
-
-/* Tabs 样式 */
 .stTabs [data-baseweb="tab-list"] { gap: 16px; border-bottom: 1px solid #DADCE0; padding-bottom: 0px; }
-.stTabs [data-baseweb="tab"] {
-    padding: 12px 16px !important;
-    background-color: transparent;
-    border: none !important;
-    font-weight: 500;
-}
-.stTabs [aria-selected="true"] {
-    border-bottom: 3px solid #1A73E8 !important;
-}
-.stTabs [aria-selected="true"] * {
-    color: #1A73E8 !important;
-}
+.stTabs [data-baseweb="tab"] { padding: 12px 16px !important; background-color: transparent; border: none !important; font-weight: 500; }
+.stTabs [aria-selected="true"] { border-bottom: 3px solid #1A73E8 !important; }
+.stTabs [aria-selected="true"] * { color: #1A73E8 !important; }
 
-/* 隐藏侧边栏逻辑 */
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 </style>
@@ -149,166 +66,99 @@ else:
 if "matched_products" not in st.session_state: st.session_state.matched_products = []
 if "step" not in st.session_state: st.session_state.step = 1
 if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
+if "output_mode" not in st.session_state: st.session_state.output_mode = "card"
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 if "generated_cards_list" not in st.session_state: st.session_state.generated_cards_list = []
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
-# ================= HTML 响应式模板库 =================
+# ================= HTML 响应式模板库 (全面重写为抗干扰 Inline CSS) =================
 templates = {
     "模板 1：左右结构 (经典极简)": {
         "type": "single",
         "html": """
-<style>
-.g-seo-t1 {{ display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; }}
-.g-seo-t1-img {{ width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box; }}
-.g-seo-t1-img img {{ width: 100%; height: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; }}
-.g-seo-t1-content {{ width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }}
-.g-seo-t1-title {{ margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t1-price-wrap {{ margin-bottom: 12px; }}
-.g-seo-t1-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }}
-.g-seo-t1-specs {{ background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t1-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; }}
-.g-seo-t1-btn:hover {{ background-color: #43D8C9; }}
-@media (max-width: 640px) {{
-    .g-seo-t1 {{ flex-direction: column; }}
-    .g-seo-t1-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
-    .g-seo-t1-content {{ width: 100%; padding: 15px; }}
-}}
-</style>
-<article class="g-seo-t1">
-    <div class="g-seo-t1-img">
-        <img src="{image_url}" loading="lazy" alt="{title}">
+{json_ld}
+<div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px;">
+    <div style="flex: 1 1 200px; min-width: 40%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+        </a>
     </div>
-    <div class="g-seo-t1-content">
+    <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 class="g-seo-t1-title">{title}</h3>
-            <div class="g-seo-t1-price-wrap">
-                <span class="g-seo-t1-price">🏷️ {price}</span>
+            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4;">{title}</h3>
+            <div style="margin-bottom: 12px;">
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
             </div>
-            <div class="g-seo-t1-specs">
+            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5;">
                 <strong>⚙️ </strong>{specs}
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t1-btn">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: 10px;">{cta_text}</a>
     </div>
-</article>
-{json_ld}
+</div>
 """
     },
     "模板 4：左右结构 (纯净无规格)": {
         "type": "single",
         "html": """
-<style>
-.g-seo-t4 {{ display: flex; flex-direction: row; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 200px; }}
-.g-seo-t4-img {{ width: 40%; background-color: #ffffff; display: flex; align-items: center; justify-content: center; padding: 15px; box-sizing: border-box; }}
-.g-seo-t4-img img {{ width: 100%; height: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; }}
-.g-seo-t4-content {{ width: 60%; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }}
-.g-seo-t4-title {{ margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t4-price-wrap {{ margin-bottom: 15px; }}
-.g-seo-t4-price {{ background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }}
-.g-seo-t4-btn {{ display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; transition: background-color 0.3s; margin-top: auto; }}
-.g-seo-t4-btn:hover {{ background-color: #43D8C9; }}
-@media (max-width: 640px) {{
-    .g-seo-t4 {{ flex-direction: column; }}
-    .g-seo-t4-img {{ width: 100%; height: 220px; padding: 20px; border-bottom: 1px solid #eaeaea; }}
-    .g-seo-t4-content {{ width: 100%; padding: 15px; min-height: 180px; }}
-}}
-</style>
-<article class="g-seo-t4">
-    <div class="g-seo-t4-img">
-        <img src="{image_url}" loading="lazy" alt="{title}">
+{json_ld}
+<div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 200px;">
+    <div style="flex: 1 1 200px; min-width: 40%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+        </a>
     </div>
-    <div class="g-seo-t4-content">
+    <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 class="g-seo-t4-title">{title}</h3>
-            <div class="g-seo-t4-price-wrap">
-                <span class="g-seo-t4-price">🏷️ {price}</span>
+            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4;">{title}</h3>
+            <div style="margin-bottom: 15px;">
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t4-btn">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: auto;">{cta_text}</a>
     </div>
-</article>
-{json_ld}
+</div>
 """
     },
     "模板 2：上下结构 (圆润多巴胺)": {
         "type": "single",
         "html": """
-<style>
-.g-seo-t2 {{ background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto; }}
-.g-seo-t2-img {{ width: 100%; height: 260px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; }}
-.g-seo-t2-img img {{ width: 100%; height: 100%; max-height: 260px; object-fit: contain; }}
-.g-seo-t2-title {{ margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t2-specs {{ color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 50px; }}
-.g-seo-t2-bot {{ display: flex; justify-content: space-between; align-items: center; }}
-.g-seo-t2-price {{ color: #F59E0B; font-size: 22px; font-weight: 800; }}
-.g-seo-t2-btn {{ background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: opacity 0.3s; }}
-.g-seo-t2-btn:hover {{ opacity: 0.8; }}
-@media (max-width: 380px) {{
-    .g-seo-t2 {{ padding: 15px; }}
-    .g-seo-t2-price {{ font-size: 18px; }}
-    .g-seo-t2-btn {{ padding: 10px 16px; font-size: 14px; }}
-}}
-</style>
-<article class="g-seo-t2">
-    <div class="g-seo-t2-img">
-        <img src="{image_url}" loading="lazy" alt="{title}">
-    </div>
-    <h3 class="g-seo-t2-title">{title}</h3>
-    <div class="g-seo-t2-specs">{specs}</div>
-    <div class="g-seo-t2-bot">
-        <span class="g-seo-t2-price">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t2-btn">{cta_text}</a>
-    </div>
-</article>
 {json_ld}
+<div style="background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
+    <div style="width: 100%; height: 260px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 260px; object-fit: contain; border: none; outline: none;">
+        </a>
+    </div>
+    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3;">{title}</h3>
+    <div style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 50px; overflow: hidden;">{specs}</div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
+    </div>
+</div>
 """
     },
     "模板 3：多商品轮播 (单行极简)": {
         "type": "carousel",
         "html": """
-<style>
-.g-seo-t3-sec {{ background-color: #FDFBF7; padding: 30px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px; box-sizing: border-box; }}
-.g-seo-t3-track {{ display: flex; overflow-x: auto; gap: 16px; padding: 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }}
-.g-seo-t3-track::-webkit-scrollbar {{ display: none; }}
-.g-seo-t3-item {{ flex: 0 0 220px; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; transition: transform 0.3s ease; }}
-.g-seo-t3-item:hover {{ transform: translateY(-5px); }}
-.g-seo-t3-img {{ width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; display: flex; align-items: center; justify-content: center; }}
-.g-seo-t3-img img {{ width: 100%; height: 100%; max-height: 180px; object-fit: contain; }}
-.g-seo-t3-title {{ margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
-.g-seo-t3-bot {{ display: flex; justify-content: space-between; align-items: center; margin-top: auto; }}
-.g-seo-t3-price {{ color: #111111; font-size: 16px; font-weight: 800; }}
-.g-seo-t3-btn {{ background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background-color 0.3s; }}
-.g-seo-t3-btn:hover {{ background-color: #C2A594; }}
-@media (max-width: 640px) {{
-    .g-seo-t3-sec {{ padding: 20px 5px; }}
-    .g-seo-t3-item {{ flex: 0 0 170px; padding: 12px; }}
-    .g-seo-t3-img {{ height: 140px; }}
-    .g-seo-t3-img img {{ max-height: 140px; }}
-    .g-seo-t3-title {{ font-size: 13px; margin-bottom: 8px; }}
-    .g-seo-t3-price {{ font-size: 14px; }}
-    .g-seo-t3-btn {{ padding: 6px 10px; font-size: 11px; }}
-}}
-</style>
-<section aria-label="Product Carousel" class="g-seo-t3-sec">
-    <div class="g-seo-t3-track">
-        {carousel_items}
-    </div>
-</section>
 {json_ld}
+<div style="background-color: #FDFBF7; padding: 20px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;">
+    {carousel_items}
+</div>
 """,
         "item_html": """
-        <article class="g-seo-t3-item">
-            <div class="g-seo-t3-img">
-                <img src="{image_url}" loading="lazy" alt="{title}">
-            </div>
-            <h3 class="g-seo-t3-title">{title}</h3>
-            <div class="g-seo-t3-bot">
-                <span class="g-seo-t3-price">{price}</span>
-                <a href="{buy_link}" target="_blank" rel="nofollow sponsored" class="g-seo-t3-btn">{cta_text}</a>
-            </div>
-        </article>
+<div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-right: 16px; box-sizing: border-box;">
+    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
+    </div>
+    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: normal;">{title}</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block;">{cta_text}</a>
+    </div>
+</div>
 """
     }
 }
@@ -442,7 +292,7 @@ def extract_product_details(product_url):
     except Exception as e:
         return None
 
-# ================= JSON-LD 函数 =================
+# ================= JSON-LD 结构化数据 (增加 WP 防破坏包装) =================
 
 def detect_currency_and_country(url, price_str=""):
     url_lower = str(url).lower()
@@ -454,7 +304,6 @@ def detect_currency_and_country(url, price_str=""):
     if 'ca.' in url_lower or '.ca/' in url_lower: return 'CAD', 'CA'
     if 'au.' in url_lower or '.com.au/' in url_lower: return 'AUD', 'AU'
     if 'jp.' in url_lower or '.jp/' in url_lower: return 'JPY', 'JP'
-    
     p = str(price_str).upper()
     if '€' in p or 'EUR' in p: return 'EUR', 'FR' 
     if '£' in p or 'GBP' in p: return 'GBP', 'GB'
@@ -489,7 +338,8 @@ def generate_single_json_ld(title, image_url, price, specs, buy_link, return_day
             "shippingDetails": {"@type": "OfferShippingDetails", "shippingRate": {"@type": "MonetaryAmount", "value": "0", "currency": currency}, "deliveryTime": {"@type": "ShippingDeliveryTime", "handlingTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 3, "unitCode": "d"}, "transitTime": {"@type": "QuantitativeValue", "minValue": 3, "maxValue": 7, "unitCode": "d"}}}
         }
     }
-    return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
+    # 重点：利用 wp:html 区块保护，防止 WP 将其渲染成文本或加 <p> 标签导致出现奇怪图标！
+    return f'\n<!-- wp:html -->\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n<!-- /wp:html -->\n'
 
 def generate_carousel_json_ld(products_data):
     items = []
@@ -513,56 +363,40 @@ def generate_carousel_json_ld(products_data):
             }
         })
     ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
-    return f'\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False, indent=2)}\n</script>'
+    return f'\n<!-- wp:html -->\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n<!-- /wp:html -->\n'
 
 # ================= WordPress 智能注入函数 =================
 def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
-    """抓取现有文章，并在每个 H2 标签上方注入商品卡片"""
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
-    
-    # 1. 获取当前文章的纯净 HTML
     try:
         res_get = requests.get(f"{base_api}/posts/{post_id}?context=edit", auth=auth, timeout=15)
-        if res_get.status_code != 200:
-            return False, f"无法读取文章 (ID: {post_id}): {res_get.text}"
-        
+        if res_get.status_code != 200: return False, f"无法读取文章: {res_get.text}"
         post_data = res_get.json()
         current_content = post_data.get('content', {}).get('raw', '')
-    except Exception as e:
-        return False, f"读取文章异常: {e}"
+    except Exception as e: return False, f"读取异常: {e}"
 
-    # 2. 解析并智能插入 HTML
     soup = BeautifulSoup(current_content, 'html.parser')
     h2_tags = soup.find_all('h2')
     
     if not h2_tags:
-        # 如果文章没有 H2，直接安全地追加到末尾
-        for card_html in cards_html_list:
-            soup.append(BeautifulSoup(card_html, 'html.parser'))
+        for card_html in cards_html_list: soup.append(BeautifulSoup(card_html, 'html.parser'))
     else:
         card_idx = 0
-        # 依次插入到每个 H2 标签的正上方
         for h2 in h2_tags:
             if card_idx < len(cards_html_list):
                 h2.insert_before(BeautifulSoup(cards_html_list[card_idx], 'html.parser'))
                 card_idx += 1
-        
-        # 如果生成的商品卡片比 H2 标签多，剩余卡片追加到文章末尾
         while card_idx < len(cards_html_list):
             soup.append(BeautifulSoup(cards_html_list[card_idx], 'html.parser'))
             card_idx += 1
 
-    # 3. 推送更新
     update_data = {'content': str(soup)}
     try:
         res_update = requests.post(f"{base_api}/posts/{post_id}", json=update_data, auth=auth, timeout=30)
-        if res_update.status_code in [200, 201]:
-            return True, f"成功将 {len(cards_html_list)} 个卡片模块智能注入到文章中！"
-        else:
-            return False, f"更新失败: {res_update.text}"
-    except Exception as e:
-        return False, f"更新异常: {e}"
+        if res_update.status_code in [200, 201]: return True, f"成功将 {len(cards_html_list)} 个模块智能注入！"
+        else: return False, f"更新失败: {res_update.text}"
+    except Exception as e: return False, f"更新异常: {e}"
 
 # ================= 界面工作流 =================
 
@@ -585,8 +419,8 @@ with tab1:
             else:
                 with st.spinner(f"2/2 已抓取 {len(pool)} 个含图商品，正在请求 AI 海选..."):
                     raw_top_30 = ai_match_top_30(blog_text, pool)
+                    extracted = []
                     if isinstance(raw_top_30, dict):
-                        extracted = []
                         for val in raw_top_30.values():
                             if isinstance(val, list): extracted = val; break
                         raw_top_30 = extracted if extracted else [raw_top_30]
@@ -632,52 +466,58 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                         temp_selected.append(item["url"])
             st.write("") 
         
-        if st.form_submit_button("➡️ 确认选中，进入下一步 (选择模板)", type="primary"):
+        if st.form_submit_button("➡️ 确认选中，进入下一步", type="primary"):
             if not temp_selected: st.warning("请至少勾选一个商品！")
             else:
                 st.session_state.selected_urls = temp_selected
                 st.session_state.step = 3
                 st.rerun()
 
+# ================= 步骤 3：全新双轨选择模式 =================
 if st.session_state.step >= 3 and st.session_state.selected_urls:
-    st.markdown("### 步骤 3：选择商品卡片模板")
-    dummy_data = {"image_url": dummy_image, "title": "Custom Halloween Decoration", "price": "28.00 €", "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm", "buy_link": "https://fr.callie.com", "cta_text": "Add To Cart", "json_ld": ""}
+    st.markdown("### 步骤 3：选择数据输出模式")
     
-    tmpl_cols = st.columns(len(templates))
-    for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
-        with col:
-            st.markdown(f"**{tmpl_name}**")
-            if tmpl_data["type"] == "carousel":
-                dummy_item = tmpl_data["item_html"].format(**dummy_data)
-                preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3).format(json_ld="")
-            else:
-                preview_html = tmpl_data["html"].format(**dummy_data)
-            
-            preview_wrapper = f"""
-            <div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #DADCE0; border-radius: 8px; padding: 10px; background: #fff;">
-                <div style="transform: scale(0.75); transform-origin: top left; width: 133%;">
-                    {preview_html}
-                </div>
-            </div>
-            """
-            st.html(preview_wrapper)
-            
-            if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
-                st.session_state.selected_template = tmpl_name
-                st.session_state.step = 4
-                st.rerun()
+    st.info("💡 **您希望在博客文章中插入什么形态的商品？** \n\n如果你觉得卡片过于繁琐，可以选择【纯净原图】，系统将自动抓取并生成带有 SEO `alt` 标签和跳转链接的纯净 `<a><img></a>` 图片代码。")
+    
+    mode_choice = st.radio("请选择：", ["🎨 生成高转化商品卡片 (包含完整排版与样式)", "🖼️ 仅生成纯净原图 (抗干扰，纯粹 SEO/GEO 优化)"], horizontal=True, label_visibility="collapsed")
+    
+    if mode_choice.startswith("🎨"):
+        st.session_state.output_mode = "card"
+        
+        dummy_data = {"image_url": dummy_image, "title": "Custom Halloween Decoration", "price": "28.00 €", "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm", "buy_link": "https://fr.callie.com", "cta_text": "Add To Cart", "json_ld": ""}
+        tmpl_cols = st.columns(len(templates))
+        for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
+            with col:
+                st.markdown(f"**{tmpl_name}**")
+                if tmpl_data["type"] == "carousel":
+                    dummy_item = tmpl_data["item_html"].format(**dummy_data)
+                    preview_html = tmpl_data["html"].replace("{carousel_items}", dummy_item * 3).format(json_ld="")
+                else:
+                    preview_html = tmpl_data["html"].format(**dummy_data)
+                
+                preview_wrapper = f"""<div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #DADCE0; border-radius: 8px; padding: 10px; background: #fff;"><div style="transform: scale(0.75); transform-origin: top left; width: 133%;">{preview_html}</div></div>"""
+                st.html(preview_wrapper)
+                
+                if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
+                    st.session_state.selected_template = tmpl_name
+                    st.session_state.step = 4
+                    st.rerun()
+    else:
+        st.session_state.output_mode = "image"
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("✨ 确认使用【纯净原图】模式并提取数据", type="primary"):
+            st.session_state.step = 4
+            st.rerun()
 
-if st.session_state.step >= 4 and st.session_state.selected_template:
+if st.session_state.step >= 4:
     st.markdown("### 步骤 4：最终生成结果")
-    st.info(f"👉 当前使用的排版：**{st.session_state.selected_template}**")
     
     selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
-    tmpl_config = templates[st.session_state.selected_template]
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     total = len(selected_items)
     all_extracted_data = []
-    generated_single_cards = [] # 用于收集生成的单个独立卡片HTML
+    generated_single_cards = [] 
     
     for i, item in enumerate(selected_items):
         prod_url = item["url"]
@@ -693,56 +533,71 @@ if st.session_state.step >= 4 and st.session_state.selected_template:
             details_data["specs_plain"] = str(raw_specs).replace('\n', ' ')
             all_extracted_data.append(details_data)
             
-            if tmpl_config["type"] == "single":
-                ld_script = generate_single_json_ld(
-                    details_data.get("title", ""), details_data.get("image_url", ""), 
-                    details_data.get("price", ""), details_data.get("specs_plain", ""), 
-                    details_data.get("buy_link", ""), details_data.get("return_days", 30)
-                )
-                card_html = tmpl_config["html"].format(
-                    image_url=details_data.get("image_url", ""), title=details_data.get("title", ""),
-                    price=details_data.get("price", ""), specs=specs_str,
-                    buy_link=details_data.get("buy_link", ""), cta_text=details_data.get("cta_text", "Buy Now"),
-                    json_ld=ld_script
-                )
-                generated_single_cards.append(card_html) # 存入待注入列表
-                
-                st.markdown(f"**📝 {details_data.get('title', prod_title_preview)}**")
+            # 生成 JSON-LD (即使纯净图片模式也附带，利好 SEO)
+            ld_script = generate_single_json_ld(
+                details_data.get("title", ""), details_data.get("image_url", ""), 
+                details_data.get("price", ""), details_data.get("specs_plain", ""), 
+                details_data.get("buy_link", ""), details_data.get("return_days", 30)
+            )
+            
+            # ============= 纯净原图模式逻辑 =============
+            if st.session_state.output_mode == "image":
+                raw_img_html = f"""
+{ld_script}
+<div style="text-align: center; margin-bottom: 25px;">
+    <a href="{details_data.get("buy_link")}" target="_blank" rel="nofollow sponsored" title="{details_data.get("title", "Callie Product")}">
+        <img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    </a>
+</div>
+"""
+                generated_single_cards.append(raw_img_html)
+                st.markdown(f"**📝 原图预览: {details_data.get('title', prod_title_preview)}**")
                 col_left, col_right = st.columns([1, 1], gap="large")
-                with col_left:
-                    st.caption("👁️ 视觉预览 (响应式)")
-                    st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
+                with col_left: st.html(raw_img_html)
                 with col_right:
-                    with st.expander("💻 点击展开 / 复制完整 HTML 代码"):
-                        st.code(card_html, language='html')
+                    with st.expander("💻 点击展开 / 复制 HTML 代码"): st.code(raw_img_html, language='html')
                 st.write("---") 
+                
+            # ============= 卡片生成模式逻辑 =============
+            else:
+                tmpl_config = templates[st.session_state.selected_template]
+                if tmpl_config["type"] == "single":
+                    card_html = tmpl_config["html"].format(
+                        image_url=details_data.get("image_url", ""), title=details_data.get("title", ""),
+                        price=details_data.get("price", ""), specs=specs_str,
+                        buy_link=details_data.get("buy_link", ""), cta_text=details_data.get("cta_text", "Buy Now"),
+                        json_ld=ld_script
+                    )
+                    generated_single_cards.append(card_html)
+                    st.markdown(f"**📝 卡片预览: {details_data.get('title', prod_title_preview)}**")
+                    col_left, col_right = st.columns([1, 1], gap="large")
+                    with col_left: st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
+                    with col_right:
+                        with st.expander("💻 点击展开 / 复制完整 HTML 代码"): st.code(card_html, language='html')
+                    st.write("---") 
         my_bar.progress((i + 1) / total, text=f"已处理 {i+1}/{total} 个商品...")
         
-    if tmpl_config["type"] == "carousel" and all_extracted_data:
+    # 如果是轮播图模式
+    if st.session_state.output_mode == "card" and templates[st.session_state.selected_template]["type"] == "carousel" and all_extracted_data:
         st.markdown("**📝 以下是包含所有勾选商品的轮播图代码组件**")
         ld_script = generate_carousel_json_ld(all_extracted_data)
         carousel_items_str = ""
         for data in all_extracted_data:
-            carousel_items_str += tmpl_config["item_html"].format(
+            carousel_items_str += templates[st.session_state.selected_template]["item_html"].format(
                 image_url=data.get("image_url", ""), title=data.get("title", ""),
                 price=data.get("price", ""), buy_link=data.get("buy_link", ""), cta_text=data.get("cta_text", "Buy Now")
             )
-        final_carousel_html = tmpl_config["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
-        
-        # 轮播图作为一个整体代码块存入注入列表
+        final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         st.session_state.generated_cards_list = [final_carousel_html]
         
         col_left, col_right = st.columns([1, 1], gap="large")
-        with col_left:
-            st.caption("👁️ 视觉预览 (响应式，可横向滑动)")
-            st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
+        with col_left: st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
         with col_right:
-            with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"):
-                st.code(final_carousel_html, language='html')
-    elif tmpl_config["type"] == "single" and generated_single_cards:
+            with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"): st.code(final_carousel_html, language='html')
+    elif generated_single_cards:
         st.session_state.generated_cards_list = generated_single_cards
                 
-    st.success("✅ 全部处理完毕！已自动注入自适应 CSS 与 JSON-LD 结构化数据。")
+    st.success(f"✅ 全部处理完毕！已生成 {len(st.session_state.generated_cards_list)} 个模块。")
 
 # ================= 步骤 5：自动注入文章 =================
 if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_list", None):
@@ -751,8 +606,8 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
     
     col_w1, col_w2 = st.columns([1, 1], gap="large")
     with col_w1:
-        st.info("💡 **H2 对齐注入逻辑**\n\n系统会自动读取目标文章源码，并将上方生成的商品卡片，按顺序依次插入到文章中每个 `<h2>` 标题标签的上方。若卡片数量多于 H2 数量，剩余的卡片会自动追加到文章末尾。")
-        st.markdown(f"**当前待注入卡片/模块数：** `{len(st.session_state.generated_cards_list)}` 个")
+        st.info("💡 **H2 对齐注入逻辑**\n\n系统会自动读取目标文章源码，并将上方生成的内容（商品卡片或纯净原图），按顺序依次插入到文章中每个 `<h2>` 标题标签的上方。若商品数量多于 H2 数量，剩余的会自动追加到文章末尾。")
+        st.markdown(f"**当前待推送到 WP 的模块总数：** `{len(st.session_state.generated_cards_list)}` 个")
         
     with col_w2:
         my_wp_sites = {
@@ -785,7 +640,7 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
             with c2: wp_pass = st.text_input(f"应用密码", type="password")
             
-        target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。可以在 WP 后台编辑页的网址中找到 post=XXX。")
+        target_post_id = st.text_input("🎯 指定文章 ID (必填)", help="填入你要修改的文章 ID (纯数字，如 1024)。")
         
         if st.button("🚀 开始注入并更新文章", type="primary"):
             if not target_post_id.strip(): 
@@ -793,7 +648,7 @@ if st.session_state.step >= 4 and getattr(st.session_state, "generated_cards_lis
             elif not wp_user or not wp_pass: 
                 st.warning("请确保验证信息完整！")
             else:
-                with st.spinner("正在远程读取文章并执行注入操作..."):
+                with st.spinner("正在远程读取文章并执行防破坏式注入..."):
                     success, msg = push_cards_to_wp_h2(wp_url, wp_user, wp_pass, target_post_id, st.session_state.generated_cards_list)
                     if success:
                         st.success(f"🎉 {msg}")
