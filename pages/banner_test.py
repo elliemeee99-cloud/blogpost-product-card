@@ -9,122 +9,39 @@ from PIL import Image, ImageOps
 from io import BytesIO
 
 # ================= 配置与初始化 =================
-st.set_page_config(page_title="Banner与推送测试", layout="wide")
+st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
 
 # 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
-/* 1. 谷歌全局配色与背景 */
-.stApp {
-    background-color: #F8F9FA;
-    color: #202124;
-    font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
-}
+.stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
 p, span, label { color: #5F6368 !important; }
-
-/* 2. 字体排版 */
-h1, h2, h3, h4 {
-    font-family: 'Google Sans', 'Roboto', sans-serif !important;
-    color: #202124 !important;
-    font-weight: 500 !important;
-}
+h1, h2, h3, h4 { font-family: 'Google Sans', 'Roboto', sans-serif !important; color: #202124 !important; font-weight: 500 !important; }
 h1 { font-size: 1.8rem !important; padding-bottom: 0.5rem; }
 h3 { font-size: 1.2rem !important; }
+[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1280px; }
 
-/* 3. 间距与留白 */
-[data-testid="block-container"] { padding-top: 2rem !important; padding-bottom: 4rem !important; max-width: 1200px; }
+[data-testid="stPageLink-NavLink"] { background-color: #FFFFFF; border-radius: 8px; padding: 10px 20px; border: 1px solid #E5E7EB; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); transition: all 0.2s ease; justify-content: center; font-weight: 500; }
+[data-testid="stPageLink-NavLink"]:hover { border-color: #1A73E8; color: #1A73E8 !important; }
 
-/* 4. 组件样式 - 顶部导航 (谷歌药丸状标签) */
-[data-testid="stPageLink-NavLink"] {
-    background-color: #FFFFFF;
-    border-radius: 24px;
-    padding: 8px 20px;
-    border: 1px solid #DADCE0;
-    transition: all 0.2s ease;
-    justify-content: center;
-    font-weight: 500;
-}
-[data-testid="stPageLink-NavLink"]:hover {
-    background-color: #F1F3F4;
-    border-color: #DADCE0;
-}
-[data-testid="stPageLink-NavLink"] p {
-    color: #1A73E8 !important; /* 谷歌蓝 */
-}
+.stButton > button { border-radius: 8px !important; border: none !important; font-weight: 600 !important; padding: 8px 16px !important; transition: all 0.2s ease !important; }
+.stButton > button[kind="primary"] { background-color: #1A73E8 !important; color: white !important; box-shadow: 0 1px 2px rgba(26, 115, 232, 0.2) !important; }
+.stButton > button[kind="primary"]:hover { background-color: #174EA6 !important; transform: translateY(-1px); }
+.stButton > button[kind="secondary"] { background: #FFFFFF !important; color: #374151 !important; border: 1px solid #D1D5DB !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important; }
+.stButton > button[kind="secondary"]:hover { background: #F3F4F6 !important; border-color: #9CA3AF !important; }
 
-/* 4. 组件样式 - 按钮 (修复文字看不见的问题) */
-.stButton > button {
-    border-radius: 4px !important;
-    border: none !important;
-    font-weight: 500 !important;
-    padding: 8px 24px !important;
-    transition: all 0.2s ease !important;
-}
-.stButton > button[kind="primary"] {
-    background-color: #1A73E8 !important; /* 谷歌蓝 */
-    box-shadow: none !important;
-}
-.stButton > button[kind="primary"] * {
-    color: #FFFFFF !important; /* 强制所有内部文字为白色 */
-}
-.stButton > button[kind="primary"]:hover {
-    background-color: #174EA6 !important;
-    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
-}
-.stButton > button[kind="secondary"] {
-    background: #FFFFFF !important;
-    border: 1px solid #DADCE0 !important;
-}
-.stButton > button[kind="secondary"] * {
-    color: #1A73E8 !important; 
-}
-.stButton > button[kind="secondary"]:hover {
-    background: #F1F3F4 !important;
-}
+.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div { border-radius: 8px !important; border: 1px solid #D1D5DB !important; background-color: #FFFFFF !important; padding: 10px 12px !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important; }
+.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus { border-color: #1A73E8 !important; box-shadow: 0 0 0 1px #1A73E8 !important; }
 
-/* 4. 组件样式 - 输入框、卡片、折叠面板 */
-.stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
-    border-radius: 4px !important;
-    border: 1px solid #DADCE0 !important;
-    background-color: #FFFFFF !important;
-    padding: 10px 14px !important;
-}
-.stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus, .stSelectbox>div>div>div:focus {
-    border: 2px solid #1A73E8 !important;
-    padding: 9px 13px !important; 
-    box-shadow: none !important;
-}
+[data-testid="stForm"], [data-testid="stExpander"] { background-color: #FFFFFF; border-radius: 12px !important; border: 1px solid #E5E7EB !important; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important; padding: 20px !important; }
+[data-testid="stAlert"] { border-radius: 8px !important; border: 1px solid #E5E7EB !important; background-color: #FFFFFF !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important; border-left: 4px solid #1A73E8 !important; }
 
-/* 卡片化区块 */
-[data-testid="stForm"], [data-testid="stExpander"] {
-    background-color: #FFFFFF;
-    border-radius: 8px !important;
-    border: 1px solid #DADCE0 !important;
-    box-shadow: none !important;
-    padding: 20px !important;
-}
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    border: 1px solid #DADCE0 !important;
-    background-color: #FFFFFF !important;
-    border-left: 4px solid #1A73E8 !important;
-}
+.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 2px solid #E5E7EB; padding-bottom: 0px; }
+.stTabs [data-baseweb="tab"] { padding: 12px 16px !important; background-color: transparent; border: none !important; color: #6B7280; font-weight: 500; }
+.stTabs [aria-selected="true"] { color: #1A73E8 !important; border-bottom: 2px solid #1A73E8 !important; font-weight: 600; }
 
-/* Tabs 样式 */
-.stTabs [data-baseweb="tab-list"] { gap: 16px; border-bottom: 1px solid #DADCE0; padding-bottom: 0px; }
-.stTabs [data-baseweb="tab"] {
-    padding: 12px 16px !important;
-    background-color: transparent;
-    border: none !important;
-    font-weight: 500;
-}
-.stTabs [aria-selected="true"] {
-    border-bottom: 3px solid #1A73E8 !important;
-}
-.stTabs [aria-selected="true"] * {
-    color: #1A73E8 !important;
-}
-
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -189,36 +106,6 @@ def fetch_product_list(category_url):
                     if len(products) >= 60: break
     return products
 
-def clean_json_response(content):
-    content = content.strip()
-    if content.startswith("```"):
-        start_idx = content.find('\n') + 1
-        end_idx = content.rfind('```')
-        if start_idx > 0 and end_idx > start_idx:
-            content = content[start_idx:end_idx].strip()
-    return content
-
-def ai_match_top_30(blog_text, product_list):
-    prompt = f"""
-    You are an expert e-commerce recommender.
-    I will provide a Blog Post content and a list of product candidates.
-    CRITICAL INSTRUCTION: Select and return AS MANY relevant products as possible, up to a maximum of 30. 
-    Blog Post: {blog_text[:3000]}
-    Product Candidates: {json.dumps(product_list, ensure_ascii=False)}
-    Output ONLY a JSON array of the selected products.
-    """
-    try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} if "json" in prompt.lower() else None,
-            max_tokens=4000
-        )
-        result_text = clean_json_response(response.choices[0].message.content)
-        return json.loads(result_text)
-    except:
-        return product_list[:30]
-
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     products = []
@@ -232,29 +119,6 @@ def fetch_direct_urls(url_list_text):
             products.append({"title": title, "url": url.split('?')[0], "thumbnail": img_url})
     return products
 
-def extract_basic_details(product_url):
-    soup = get_soup(product_url)
-    if not soup: return None
-    main_image = ""
-    og_img = soup.find('meta', property='og:image')
-    if og_img and og_img.get('content'): main_image = og_img['content']
-    main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
-    
-    prompt = f"""
-    Extract from text in EXACT ORIGINAL LANGUAGE. Do not extract shipping fees as price.
-    Extract into JSON: "title", "price", "cta_text" (e.g. "Buy Now").
-    Page Text: {soup.get_text(separator=' ', strip=True)[:3000]}
-    """
-    try:
-        response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"}, max_tokens=500)
-        res_str = response.choices[0].message.content.strip()
-        if res_str.startswith("```"): res_str = res_str.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-        result = json.loads(res_str)
-        result["image_url"] = main_image
-        result["buy_link"] = product_url
-        return result
-    except: return None
-
 def create_banner_collage(image_urls):
     imgs = []
     for url in image_urls:
@@ -265,24 +129,36 @@ def create_banner_collage(image_urls):
             if res.status_code == 200: imgs.append(Image.open(BytesIO(res.content)).convert("RGB"))
         except: pass
     if not imgs: return None
-    
     banner_w, banner_h = 1200, 630
     banner = Image.new('RGB', (banner_w, banner_h), (255, 255, 255))
     w_per_img = banner_w // len(imgs)
-    
     for i, img in enumerate(imgs):
         img_cropped = ImageOps.fit(img, (w_per_img, banner_h), Image.Resampling.LANCZOS)
         banner.paste(img_cropped, (i * w_per_img, 0))
-        
     buf = BytesIO()
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-def push_to_wordpress(wp_url, username, password, title, html_content, banner_bytes, post_id=""):
+def clean_json_response(content):
+    content = content.strip()
+    if content.startswith("```"):
+        start_idx = content.find('\n') + 1
+        end_idx = content.rfind('```')
+        if start_idx > 0 and end_idx > start_idx:
+            content = content[start_idx:end_idx].strip()
+    return content
+
+def ai_match_top_30(blog_text, product_list):
+    prompt = f"""You are an expert e-commerce recommender. Select and return AS MANY relevant products as possible, up to a maximum of 30. Blog Post: {blog_text[:3000]} Product Candidates: {json.dumps(product_list, ensure_ascii=False)} Output ONLY a JSON array."""
+    try:
+        response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000)
+        return json.loads(clean_json_response(response.choices[0].message.content))
+    except: return product_list[:30]
+
+def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth = (username, password)
-    media_id = None
-    media_url = ""
+    media_id, media_url = None, ""
     
     if banner_bytes:
         headers = {'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}
@@ -292,32 +168,35 @@ def push_to_wordpress(wp_url, username, password, title, html_content, banner_by
                 media_data = res_media.json()
                 media_id = media_data.get('id')
                 media_url = media_data.get('source_url')
-            else: 
-                return False, f"图片上传失败: {res_media.text}"
+            else: return False, f"图片上传失败: {res_media.text}"
         except Exception as e: return False, f"图片上传异常: {e}"
-            
-    if media_url:
-        html_content = f'<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>' + html_content
 
-    post_data = {'content': html_content}
-    if media_id: 
-        post_data['featured_media'] = media_id 
-        
     try:
         if post_id.strip():
-            if title: post_data['title'] = title
-            res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=post_data, auth=auth, timeout=30)
+            res_get = requests.get(f"{base_api}/posts/{post_id.strip()}?context=edit", auth=auth, timeout=15)
+            if res_get.status_code != 200: return False, "无法读取原文章。"
+            current_content = res_get.json().get('content', {}).get('raw', '')
+            
+            # 使用标准的 Gutenberg HTML 块注入顶部 Banner
+            if media_url:
+                banner_html = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n'
+                current_content = banner_html + current_content
+                
+            update_data = {'content': current_content}
+            if title: update_data['title'] = title
+            if media_id: update_data['featured_media'] = media_id
+            
+            res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=update_data, auth=auth, timeout=30)
             action_text = "更新特定文章"
         else:
-            post_data['title'] = title
-            post_data['status'] = 'draft'
+            banner_html = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' if media_url else ""
+            post_data = {'title': title, 'content': banner_html, 'status': 'draft'}
+            if media_id: post_data['featured_media'] = media_id 
             res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
             action_text = "新建草稿"
             
-        if res_post.status_code in [200, 201]: 
-            return True, f"{action_text}成功！"
-        else: 
-            return False, f"{action_text}失败: {res_post.text}"
+        if res_post.status_code in [200, 201]: return True, f"{action_text}成功！"
+        else: return False, f"{action_text}失败: {res_post.text}"
     except Exception as e: return False, f"发布异常: {e}"
 
 # ================= UI 布局 =================
@@ -330,32 +209,22 @@ with tab_b1:
     col1, col2 = st.columns(2)
     with col1: b_blog_url = st.text_input("博客文章链接", placeholder="用于语义匹配分析", key="b_blog")
     with col2: b_shop_url = st.text_input("商品列表页链接", placeholder="用于抓取候选商品", key="b_shop")
-    
     if st.button("🔍 抓取并智能海选", type="primary", key="b_btn_ai"):
         if not b_blog_url or not b_shop_url: st.warning("请填写完整的两个链接！")
         else:
-            with st.spinner("1/2 正在抓取博客和着陆页候选商品..."):
+            with st.spinner("正在抓取博客和候选商品..."):
                 blog_text = fetch_blog_context(b_blog_url)
                 raw_pool = fetch_product_list(b_shop_url)
             if not raw_pool: st.error("未能抓取到有效图片，请检查链接。")
             else:
-                with st.spinner(f"2/2 已抓取 {len(raw_pool)} 个含图商品，正在请求 AI 海选..."):
+                with st.spinner(f"正在请求 AI 海选..."):
                     matched = ai_match_top_30(blog_text, raw_pool)
-                    extracted = []
-                    if isinstance(matched, dict):
-                        for val in matched.values():
-                            if isinstance(val, list): extracted = val; break
-                        matched = extracted if extracted else [matched]
-                    valid_pool = []
-                    if isinstance(matched, list):
-                        for item in matched:
-                            if isinstance(item, dict) and "url" in item:
-                                if "thumbnail" not in item: item["thumbnail"] = dummy_image
-                                valid_pool.append(item)
+                    extracted = matched.values() if isinstance(matched, dict) else [matched]
+                    valid_pool = [item for sublist in extracted if isinstance(sublist, list) for item in sublist if isinstance(item, dict) and "url" in item]
+                    for p in valid_pool: p.setdefault("thumbnail", dummy_image)
                     if valid_pool:
                         st.session_state.b_pool = valid_pool
                         st.session_state.b_step = 2
-                        st.session_state.b_final_html = ""
                         st.session_state.b_banner_bytes = None
                         st.rerun()
 
@@ -367,7 +236,6 @@ with tab_b2:
             with st.spinner("正在解析图片..."):
                 st.session_state.b_pool = fetch_direct_urls(b_direct_urls)
                 st.session_state.b_step = 2
-                st.session_state.b_final_html = ""
                 st.session_state.b_banner_bytes = None
                 st.rerun()
 
@@ -383,8 +251,7 @@ if st.session_state.b_step >= 2 and st.session_state.b_pool:
             for col, item in zip(cols, row_items):
                 with col:
                     st.image(item["thumbnail"])
-                    if st.checkbox("选中拼图", key=f"b_chk_{item['url']}"):
-                        b_temp_selected.append(item["url"])
+                    if st.checkbox("选中拼图", key=f"b_chk_{item['url']}"): b_temp_selected.append(item["url"])
         if st.form_submit_button("➡️ 确认所选，进入自动化测试", type="primary"):
             if not b_temp_selected: st.warning("请至少勾选一个商品！")
             else:
@@ -407,65 +274,36 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
                     st.session_state.b_banner_bytes = banner_data
                     st.success("✅ Banner 生成成功！")
                 else: st.error("拼图失败。")
-        
         if st.session_state.b_banner_bytes:
             st.image(st.session_state.b_banner_bytes, caption="已生成的 1200x630 Banner 预览图")
 
     with col_b2:
         st.info("🚀 选择目标网站，自动更新指定文章或新建博客草稿。")
-        
-        my_wp_sites = {
-            "🇩🇪 德语站 (www.callie.de)": {"url": "https://www.callie.de/blog", "prefix": "DE"},
-            "🇫🇷 法语站 (fr.callie.com)": {"url": "https://fr.callie.com/blog", "prefix": "FR"},
-            "🇪🇸 西班牙站 (www.callie.es)": {"url": "https://www.callie.es/blog", "prefix": "ES"},
-            "🇮🇹 意大利站 (it.callie.com)": {"url": "https://it.callie.com/blog", "prefix": "IT"},
-            "🇳🇱 荷兰站 (nl.callie.com)": {"url": "https://nl.callie.com/blog", "prefix": "NL"},
-            "🇳🇴 挪威站 (no.callie.com)": {"url": "https://no.callie.com/blog", "prefix": "NO"},
-            "🇸🇪 瑞典站 (www.callie.se)": {"url": "https://www.callie.se/blog", "prefix": "SE"},
-            "🇫🇮 芬兰站 (www.callie.fi)": {"url": "https://www.callie.fi/blog", "prefix": "FI"},
-            "🇵🇱 波兰站 (pl.callie.com)": {"url": "https://pl.callie.com/blog", "prefix": "PL"}
-        }
+        my_wp_sites = {"🇩🇪 德语站": "DE", "🇫🇷 法语站": "FR", "🇪🇸 西班牙站": "ES", "🇮🇹 意大利站": "IT", "🇳🇱 荷兰站": "NL", "🇳🇴 挪威站": "NO", "🇸🇪 瑞典站": "SE", "🇫🇮 芬兰站": "FI", "🇵🇱 波兰站": "PL"}
+        site_urls = {"DE": "https://www.callie.de/blog", "FR": "https://fr.callie.com/blog", "ES": "https://www.callie.es/blog", "IT": "https://it.callie.com/blog", "NL": "https://nl.callie.com/blog", "NO": "https://no.callie.com/blog", "SE": "https://www.callie.se/blog", "FI": "https://www.callie.fi/blog", "PL": "https://pl.callie.com/blog"}
         
         selected_site_name = st.selectbox("🎯 请选择要发布的网站：", list(my_wp_sites.keys()))
-        selected_site_data = my_wp_sites[selected_site_name]
-        wp_url = selected_site_data["url"]
-        site_prefix = selected_site_data["prefix"]
+        site_prefix = my_wp_sites[selected_site_name]
+        wp_url = site_urls[site_prefix]
         
-        user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
-        
-        if user_key in st.secrets and pass_key in st.secrets:
-            st.success(f"🔒 已自动加载【{selected_site_name.split(' ')[1]}】的专属发布凭证。")
-            wp_user = st.secrets[user_key]
-            wp_pass = st.secrets[pass_key]
+        if "WP_USER" in st.secrets and pass_key in st.secrets:
+            st.success(f"🔒 凭证已自动加载")
+            wp_user, wp_pass = st.secrets["WP_USER"], st.secrets[pass_key]
         else:
-            st.warning(f"⚠️ 未在 Secrets 中找到 {pass_key}，请前往后台添加。")
+            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
             c1, c2 = st.columns(2)
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
-            with c2: wp_pass = st.text_input(f"应用密码 (缺少 {pass_key})", type="password")
+            with c2: wp_pass = st.text_input(f"应用密码", type="password")
             
         post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
-        target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID (纯数字，如 1024)。")
+        target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID。")
         
         if st.button("🚀 2. 推送至 WordPress", type="primary"):
-            if not st.session_state.b_banner_bytes: 
-                st.warning("请先在左侧点击生成 Banner！")
-            elif not wp_user or not wp_pass: 
-                st.warning("请配置或填完所有的 WordPress 验证信息！")
+            if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
+            elif not wp_user or not wp_pass: st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
-                with st.spinner("1/2 正在提取商品简单卡片..."):
-                    if not st.session_state.b_final_html:
-                        selected_items = [p for p in st.session_state.b_pool if p["url"] in st.session_state.b_urls]
-                        temp_html = []
-                        for item in selected_items:
-                            d = extract_basic_details(item["url"])
-                            if d: temp_html.append(f'<div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; display:flex;"><img src="{d.get("image_url")}" width="100" style="margin-right:15px;"><div><h4>{d.get("title")}</h4><p style="color:red; font-size:18px;"><b>{d.get("price")}</b></p><a href="{d.get("buy_link")}" target="_blank" style="background:#1A73E8; color:#fff; padding:8px 15px; text-decoration:none; border-radius:4px;">Buy Now</a></div></div>')
-                        st.session_state.b_final_html = "\n".join(temp_html)
-                
-                with st.spinner(f"2/2 正在向 {selected_site_name} 推送中，这可能需要几十秒..."):
-                    content = '<p>这是一篇自动生成的测试草稿。</p>' + st.session_state.b_final_html
-                    success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, content, st.session_state.b_banner_bytes, target_post_id)
-                    if success: 
-                        st.success(f"🎉 成功：{msg} 请登录对应的 WordPress 后台查看。")
-                    else: 
-                        st.error(msg)
+                with st.spinner(f"正在向 {selected_site_name} 推送中..."):
+                    success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, st.session_state.b_banner_bytes, target_post_id)
+                    if success: st.success(f"🎉 成功：{msg} 请登录对应的 WordPress 后台查看。")
+                    else: st.error(msg)
