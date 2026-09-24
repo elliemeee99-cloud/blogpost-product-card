@@ -11,7 +11,6 @@ from io import BytesIO
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
 
-# 🎨 核心 UI 视觉重构：Google Material Design 规范
 st.markdown("""
 <style>
 .stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
@@ -45,129 +44,84 @@ h3 { font-size: 1.2rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 顶部全局导航栏 =================
 nav_col1, nav_col2, _ = st.columns([1.5, 1.5, 7])
-with nav_col1:
-    st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
-with nav_col2:
-    st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
+with nav_col1: st.page_link("app.py", label="📇 核心：商品卡片生成器", use_container_width=True)
+with nav_col2: st.page_link("pages/banner_test.py", label="🖼️ 测试：Banner与WP发布", use_container_width=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
-    api_key = st.secrets["DEEPSEEK_API_KEY"]
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
 else:
-    st.error("❌ 未读取到 API Key，请检查 Settings -> Secrets")
+    st.error("❌ 未读取到 API Key")
     st.stop()
 
-# 独立的状态缓存
 if "b_step" not in st.session_state: st.session_state.b_step = 1
 if "b_pool" not in st.session_state: st.session_state.b_pool = []
 if "b_urls" not in st.session_state: st.session_state.b_urls = []
 if "b_banner_bytes" not in st.session_state: st.session_state.b_banner_bytes = None
-if "b_final_html" not in st.session_state: st.session_state.b_final_html = ""
 
-dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
+dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E"
 
 def get_soup(url):
-    try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, 'lxml')
+    try: return BeautifulSoup(requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15).text, 'lxml')
     except: return None
 
 def fetch_blog_context(blog_url):
     soup = get_soup(blog_url)
-    if not soup: return ""
-    return soup.get_text(separator='\n', strip=True)[:4000]
+    return soup.get_text(separator='\n', strip=True)[:4000] if soup else ""
 
 def fetch_product_list(category_url):
     soup = get_soup(category_url)
     if not soup: return []
-    seen_urls = set()
-    products = []
+    seen, products = set(), []
     for a in soup.find_all('a', href=True):
-        title = a.get_text(strip=True)
-        href = a['href']
-        full_url = urljoin(category_url, href)
-        clean_url = full_url.split('?')[0]
-        if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
-            img = a.find('img')
-            if not img and a.parent: img = a.parent.find('img')
-            if not img and a.parent and a.parent.parent: img = a.parent.parent.find('img')
-            if img:
-                src = img.get('data-src') or img.get('src')
-                if src:
-                    img_url = urljoin(category_url, src).split('?')[0]
-                    seen_urls.add(clean_url)
-                    products.append({"title": title, "url": clean_url, "thumbnail": img_url})
-                    if len(products) >= 60: break
+        title, clean_url = a.get_text(strip=True), urljoin(category_url, a['href']).split('?')[0]
+        if len(title) > 5 and clean_url not in seen and "javascript" not in clean_url:
+            img = a.find('img') or (a.parent and a.parent.find('img')) or (a.parent and a.parent.parent and a.parent.parent.find('img'))
+            if img and (img.get('data-src') or img.get('src')):
+                seen.add(clean_url)
+                products.append({"title": title, "url": clean_url, "thumbnail": urljoin(category_url, img.get('data-src') or img.get('src')).split('?')[0]})
+                if len(products) >= 60: break
     return products
 
+def ai_match_top_30(blog_text, product_list):
+    prompt = f"""Select AS MANY relevant products as possible (up to 30). Blog Post: {blog_text[:3000]} Candidates: {json.dumps(product_list, ensure_ascii=False)} Output JSON array only."""
+    try:
+        res = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000).choices[0].message.content.strip()
+        if res.startswith("```"): res = res.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        return json.loads(res)
+    except: return product_list[:30]
+
 def fetch_direct_urls(url_list_text):
-    urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     products = []
-    for url in urls:
-        soup = get_soup(url.split('?')[0])
+    for url in [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]:
+        clean_url = url.split('?')[0]
+        soup = get_soup(clean_url)
         if soup:
-            title = soup.title.string if soup.title else "未命名商品"
-            img_url = dummy_image
             og_img = soup.find('meta', property='og:image')
-            if og_img and og_img.get('content'): img_url = urljoin(url, og_img['content']).split('?')[0]
-            products.append({"title": title, "url": url.split('?')[0], "thumbnail": img_url})
+            products.append({"title": soup.title.string if soup.title else "未命名商品", "url": clean_url, "thumbnail": urljoin(clean_url, og_img['content']).split('?')[0] if og_img and og_img.get('content') else dummy_image})
     return products
 
 def create_banner_collage(image_urls):
-    imgs = []
-    for url in image_urls:
-        if len(imgs) >= 4: break 
-        if url.startswith("data:image"): continue
-        try:
-            res = requests.get(url, timeout=5)
-            if res.status_code == 200: imgs.append(Image.open(BytesIO(res.content)).convert("RGB"))
-        except: pass
+    imgs = [Image.open(BytesIO(requests.get(url, timeout=5).content)).convert("RGB") for url in image_urls[:4] if not url.startswith("data:image") and requests.get(url, timeout=5).status_code == 200]
     if not imgs: return None
-    banner_w, banner_h = 1200, 630
-    banner = Image.new('RGB', (banner_w, banner_h), (255, 255, 255))
-    w_per_img = banner_w // len(imgs)
-    for i, img in enumerate(imgs):
-        img_cropped = ImageOps.fit(img, (w_per_img, banner_h), Image.Resampling.LANCZOS)
-        banner.paste(img_cropped, (i * w_per_img, 0))
+    banner = Image.new('RGB', (1200, 630), (255, 255, 255))
+    w_per_img = 1200 // len(imgs)
+    for i, img in enumerate(imgs): banner.paste(ImageOps.fit(img, (w_per_img, 630), Image.Resampling.LANCZOS), (i * w_per_img, 0))
     buf = BytesIO()
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-def clean_json_response(content):
-    content = content.strip()
-    if content.startswith("```"):
-        start_idx = content.find('\n') + 1
-        end_idx = content.rfind('```')
-        if start_idx > 0 and end_idx > start_idx:
-            content = content[start_idx:end_idx].strip()
-    return content
-
-def ai_match_top_30(blog_text, product_list):
-    prompt = f"""You are an expert e-commerce recommender. Select and return AS MANY relevant products as possible, up to a maximum of 30. Blog Post: {blog_text[:3000]} Product Candidates: {json.dumps(product_list, ensure_ascii=False)} Output ONLY a JSON array."""
-    try:
-        response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000)
-        return json.loads(clean_json_response(response.choices[0].message.content))
-    except: return product_list[:30]
-
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
-    auth = (username, password)
-    media_id, media_url = None, ""
+    auth, media_id, media_url = (username, password), None, ""
     
     if banner_bytes:
-        headers = {'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}
         try:
-            res_media = requests.post(f"{base_api}/media", headers=headers, data=banner_bytes, auth=auth, timeout=30)
-            if res_media.status_code in [200, 201]: 
-                media_data = res_media.json()
-                media_id = media_data.get('id')
-                media_url = media_data.get('source_url')
+            res_media = requests.post(f"{base_api}/media", headers={'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}, data=banner_bytes, auth=auth, timeout=30)
+            if res_media.status_code in [200, 201]: media_id, media_url = res_media.json().get('id'), res_media.json().get('source_url')
             else: return False, f"图片上传失败: {res_media.text}"
         except Exception as e: return False, f"图片上传异常: {e}"
 
@@ -176,16 +130,10 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
             res_get = requests.get(f"{base_api}/posts/{post_id.strip()}?context=edit", auth=auth, timeout=15)
             if res_get.status_code != 200: return False, "无法读取原文章。"
             current_content = res_get.json().get('content', {}).get('raw', '')
-            
-            # 使用标准的 Gutenberg HTML 块注入顶部 Banner
-            if media_url:
-                banner_html = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n'
-                current_content = banner_html + current_content
-                
+            if media_url: current_content = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' + current_content
             update_data = {'content': current_content}
             if title: update_data['title'] = title
             if media_id: update_data['featured_media'] = media_id
-            
             res_post = requests.post(f"{base_api}/posts/{post_id.strip()}", json=update_data, auth=auth, timeout=30)
             action_text = "更新特定文章"
         else:
@@ -202,7 +150,6 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
 # ================= UI 布局 =================
 
 st.markdown("### 步骤 1：输入数据源获取商品图片")
-
 tab_b1, tab_b2 = st.tabs(["🤖 AI 智能海选模式", "🔗 手动直达模式"])
 
 with tab_b1:
@@ -286,10 +233,14 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
+        # 恢复单账号安全加载逻辑
+        user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
-        if "WP_USER" in st.secrets and pass_key in st.secrets:
+        
+        if user_key in st.secrets and pass_key in st.secrets:
             st.success(f"🔒 凭证已自动加载")
-            wp_user, wp_pass = st.secrets["WP_USER"], st.secrets[pass_key]
+            wp_user = st.secrets[user_key]
+            wp_pass = st.secrets[pass_key]
         else:
             st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
             c1, c2 = st.columns(2)
