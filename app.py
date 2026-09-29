@@ -79,23 +79,24 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px;">
-    <!-- 优化：将左侧比例增加，最小宽度设为 48% -->
-    <div style="flex: 1.2 1 280px; min-width: 48%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+    <!-- 优化1：左侧比例调大至 1.5，去掉 padding 填充边距，使用 cover 让图片满幅 -->
+    <div style="flex: 1.5 1 250px; min-width: 45%; padding: 0; background-color: #ffffff; position: relative;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; min-height: 220px; object-fit: cover; border-radius: 12px 0 0 12px; border: none; margin: 0; display: block;">
         </a>
     </div>
-    <div style="flex: 1 1 200px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+    <!-- 优化2：右侧空间自适应，调整字体大小 -->
+    <div style="flex: 1 1 200px; padding: 16px 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+            <h3 style="margin-top: 0; color: #333333; font-size: 14px; margin-bottom: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 12px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block;">🏷️ {price}</span>
             </div>
-            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5;">
+            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; font-size: 11.5px; color: #555555; line-height: 1.4;">
                 {specs}
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: 10px;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: 10px;">{cta_text}</a>
     </div>
 </div>
 """
@@ -105,20 +106,21 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 200px;">
-    <!-- 优化：将左侧比例增加，最小宽度设为 48% -->
-    <div style="flex: 1.2 1 280px; min-width: 48%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+    <!-- 优化1：左侧比例调大至 1.5，去掉 padding 填充边距，使用 cover 让图片满幅 -->
+    <div style="flex: 1.5 1 250px; min-width: 45%; padding: 0; background-color: #ffffff; position: relative;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; min-height: 220px; object-fit: cover; border-radius: 12px 0 0 12px; border: none; margin: 0; display: block;">
         </a>
     </div>
-    <div style="flex: 1 1 200px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+    <!-- 优化2：缩小字体尺寸 -->
+    <div style="flex: 1 1 200px; padding: 16px 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+            <h3 style="margin-top: 0; color: #333333; font-size: 14px; margin-bottom: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 15px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block;">🏷️ {price}</span>
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: auto;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: auto;">{cta_text}</a>
     </div>
 </div>
 """
@@ -127,17 +129,18 @@ templates = {
         "type": "single",
         "html": """
 {json_ld}
-<div style="background-color: #FFF8EC; border-radius: 24px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
-    <div style="width: 100%; height: 260px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 260px; object-fit: contain; border: none; outline: none;">
+<div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
+    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; outline: none;">
         </a>
     </div>
-    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-    <div style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 50px; overflow: hidden;">{specs}</div>
+    <!-- 优化：字体调小 -->
+    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 15px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <div style="color: #A1887F; font-size: 11.5px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 50px; overflow: hidden;">{specs}</div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 15px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
+        <span style="color: #F59E0B; font-size: 20px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
     </div>
 </div>
 """
@@ -155,21 +158,29 @@ templates = {
     <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
-    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+        <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
     },
-    "模板 5：可滑动轮播 (带指示器)": {
+    "模板 5：可滑动轮播 (带交互指示器)": {
         "type": "carousel",
         "html": """
 {json_ld}
-<div style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif;">
-    <div style="position: absolute; top: 0; right: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,0), rgba(253,251,247,1)); border-radius: 0 16px 16px 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center;"><span style="color: #D4BBAA; font-size: 24px; font-weight: bold; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">&rsaquo;</span></div>
-    <div style="padding: 20px 10px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none;">
+<div style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif; overflow: hidden;">
+    <!-- 优化：添加左滑右滑箭头并绑定真实的 JavaScript 滚动事件 -->
+    <div onclick="this.parentElement.querySelector('.scroll-box').scrollBy({{left: -240, behavior: 'smooth'}})" style="position: absolute; left: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 10; display: flex; align-items: center; justify-content: flex-start; padding-left: 6px; cursor: pointer;">
+        <span style="color: #D4BBAA; font-size: 32px; font-weight: bold; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">&#10094;</span>
+    </div>
+    
+    <div onclick="this.parentElement.querySelector('.scroll-box').scrollBy({{left: 240, behavior: 'smooth'}})" style="position: absolute; right: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to left, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 10; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; cursor: pointer;">
+        <span style="color: #D4BBAA; font-size: 32px; font-weight: bold; pointer-events: none; text-shadow: -1px 1px 2px rgba(0,0,0,0.1);">&#10095;</span>
+    </div>
+
+    <div class="scroll-box" style="padding: 20px 10px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none;">
         <style>div::-webkit-scrollbar {{ display: none; }}</style>
         {carousel_items}
         <div style="display: inline-block; width: 20px;"></div>
@@ -181,10 +192,10 @@ templates = {
     <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
-    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+        <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -275,13 +286,13 @@ def extract_product_details(product_url):
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 核心优化：强制提取短标题与标准化的字典格式规格
+    # 核心优化 1：强制 AI 保持原文语种，且限制长度，并要求输出格式化字典
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
-    1. "title": Summarize the core product name. Keep it VERY SHORT (Max 40 characters, 5-8 words). Example: "Personalized Family Camping Mug".
+    1. "title": Summarize the core product name. Keep it VERY SHORT (Max 40 characters). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g., if German, summarize in German).
     2. "price": The true product price exactly as written.
     3. "return_days"
-    4. "specs": Extract 3-5 key specifications as a JSON Key-Value object (e.g., {{"Material": "Resin", "Size": "10x15 cm"}}).
-    5. "cta_text". 
+    4. "specs": Extract 3-4 key specifications as a JSON Key-Value object (e.g., {{"Material": "Resin", "Size": "10x15 cm"}}). Keep keys and values in the ORIGINAL LANGUAGE.
+    5. "cta_text": "Buy Now" button text in the ORIGINAL LANGUAGE.
     RULES: NEVER extract shipping fees. {price_hint} 
     Page Text: {text_content}"""
     
@@ -458,7 +469,7 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
             "image_url": dummy_image, 
             "title": "Custom Halloween Decoration", 
             "price": "28.00 €", 
-            "specs": "<ul style='margin:0; padding-left:18px; color:#555;'><li style='margin-bottom:4px;'><strong>Material:</strong> Resin</li><li><strong>Size:</strong> 10x15 cm</li></ul>", 
+            "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Material:</strong> Resin</li><li><strong>Size:</strong> 10x15 cm</li></ul>", 
             "buy_link": "https://fr.callie.com", 
             "cta_text": "Add To Cart", 
             "json_ld": ""
@@ -495,12 +506,12 @@ if st.session_state.step >= 4:
             
             # 核心优化：针对不同的提取结果，强制组装为对齐的 <ul><li> 列表格式
             if isinstance(raw_specs, dict):
-                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
+                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
             elif isinstance(raw_specs, list):
-                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'>{x}</li>" for x in raw_specs]) + "</ul>"
+                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in raw_specs]) + "</ul>"
             else:
                 lines = [x.strip() for x in str(raw_specs).replace('•', '\n').split('\n') if x.strip()]
-                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'>{x}</li>" for x in lines]) + "</ul>"
+                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in lines]) + "</ul>"
                 
             details_data["specs_formatted"] = specs_str
             all_extracted_data.append(details_data)
