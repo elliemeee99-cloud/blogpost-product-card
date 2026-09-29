@@ -74,24 +74,25 @@ dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2
 
 # ================= HTML 响应式模板库 (防破坏 Inline CSS) =================
 templates = {
-    "模板 1：左右结构 (经典极简)": {
+    "模板 1：左右结构 (规格列表版)": {
         "type": "single",
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px;">
-    <div style="flex: 1 1 200px; min-width: 40%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
+    <!-- 优化：将左侧比例增加，最小宽度设为 48% -->
+    <div style="flex: 1.2 1 280px; min-width: 48%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
         </a>
     </div>
-    <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+    <div style="flex: 1 1 200px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
             <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 12px;">
                 <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
             </div>
-            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5;">
-                <strong>⚙️ </strong>{specs}
+            <div style="background-color: #FFF5E4; border-radius: 8px; padding: 12px 16px; margin-bottom: 15px; font-size: 13px; color: #555555; line-height: 1.5;">
+                {specs}
             </div>
         </div>
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: 10px;">{cta_text}</a>
@@ -104,12 +105,13 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: wrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 200px;">
-    <div style="flex: 1 1 200px; min-width: 40%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
+    <!-- 优化：将左侧比例增加，最小宽度设为 48% -->
+    <div style="flex: 1.2 1 280px; min-width: 48%; background-color: #ffffff; padding: 15px; box-sizing: border-box; text-align: center; display: flex; align-items: center; justify-content: center;">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; border: none; outline: none;">
         </a>
     </div>
-    <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+    <div style="flex: 1 1 200px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
             <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 15px;">
@@ -168,7 +170,7 @@ templates = {
 <div style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif;">
     <div style="position: absolute; top: 0; right: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,0), rgba(253,251,247,1)); border-radius: 0 16px 16px 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center;"><span style="color: #D4BBAA; font-size: 24px; font-weight: bold; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">&rsaquo;</span></div>
     <div style="padding: 20px 10px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none;">
-        <style>div::-webkit-scrollbar { display: none; }</style>
+        <style>div::-webkit-scrollbar {{ display: none; }}</style>
         {carousel_items}
         <div style="display: inline-block; width: 20px;"></div>
     </div>
@@ -273,12 +275,12 @@ def extract_product_details(product_url):
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 核心优化 1：强制要求 AI 提取简短的 title (40字以内)，防止单行折叠
+    # 核心优化：强制提取短标题与标准化的字典格式规格
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
     1. "title": Summarize the core product name. Keep it VERY SHORT (Max 40 characters, 5-8 words). Example: "Personalized Family Camping Mug".
-    2. "price"
+    2. "price": The true product price exactly as written.
     3. "return_days"
-    4. "specs" (brief)
+    4. "specs": Extract 3-5 key specifications as a JSON Key-Value object (e.g., {{"Material": "Resin", "Size": "10x15 cm"}}).
     5. "cta_text". 
     RULES: NEVER extract shipping fees. {price_hint} 
     Page Text: {text_content}"""
@@ -450,7 +452,18 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
     
     if mode_choice.startswith("🎨"):
         st.session_state.output_mode = "card"
-        dummy_data = {"image_url": dummy_image, "title": "Custom Halloween Decoration", "price": "28.00 €", "specs": "Material: Resin &nbsp;•&nbsp; Size: 10x15 cm", "buy_link": "https://fr.callie.com", "cta_text": "Add To Cart", "json_ld": ""}
+        
+        # 将预览用的 specs 替换为规范的列表展示格式
+        dummy_data = {
+            "image_url": dummy_image, 
+            "title": "Custom Halloween Decoration", 
+            "price": "28.00 €", 
+            "specs": "<ul style='margin:0; padding-left:18px; color:#555;'><li style='margin-bottom:4px;'><strong>Material:</strong> Resin</li><li><strong>Size:</strong> 10x15 cm</li></ul>", 
+            "buy_link": "https://fr.callie.com", 
+            "cta_text": "Add To Cart", 
+            "json_ld": ""
+        }
+        
         tmpl_cols = st.columns(len(templates))
         for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
             with col:
@@ -479,7 +492,16 @@ if st.session_state.step >= 4:
         details_data = extract_product_details(item["url"])
         if details_data:
             raw_specs = details_data.get("specs", "")
-            specs_str = "&nbsp;•&nbsp;".join([str(x) for x in raw_specs]) if isinstance(raw_specs, list) else str(raw_specs).replace('\n', '&nbsp;•&nbsp;')
+            
+            # 核心优化：针对不同的提取结果，强制组装为对齐的 <ul><li> 列表格式
+            if isinstance(raw_specs, dict):
+                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
+            elif isinstance(raw_specs, list):
+                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'>{x}</li>" for x in raw_specs]) + "</ul>"
+            else:
+                lines = [x.strip() for x in str(raw_specs).replace('•', '\n').split('\n') if x.strip()]
+                specs_str = "<ul style='margin:0; padding-left:18px;'>" + "".join([f"<li style='margin-bottom:4px;'>{x}</li>" for x in lines]) + "</ul>"
+                
             details_data["specs_formatted"] = specs_str
             all_extracted_data.append(details_data)
             
@@ -511,7 +533,7 @@ if st.session_state.step >= 4:
         st.markdown("**📝 以下是包含所有勾选商品的轮播图代码组件**")
         ld_script = generate_carousel_json_ld(all_extracted_data)
         
-        # 核心优化 2：统一提取第一个商品的 CTA 按钮文本，应用到整个轮播图的所有商品
+        # 核心优化：统一轮播图内所有 CTA 按钮文本，保持风格一致
         unified_cta_text = all_extracted_data[0].get("cta_text", "Buy Now") if len(all_extracted_data) > 0 else "Buy Now"
         
         carousel_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(
@@ -519,7 +541,7 @@ if st.session_state.step >= 4:
             title=data.get("title", ""), 
             price=data.get("price", ""), 
             buy_link=data.get("buy_link", ""), 
-            cta_text=unified_cta_text  # 强制应用统一文案
+            cta_text=unified_cta_text
         ) for data in all_extracted_data])
         
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
