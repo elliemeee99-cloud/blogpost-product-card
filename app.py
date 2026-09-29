@@ -86,7 +86,7 @@ templates = {
     </div>
     <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4;">{title}</h3>
+            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 12px;">
                 <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
             </div>
@@ -111,7 +111,7 @@ templates = {
     </div>
     <div style="flex: 2 1 300px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
         <div>
-            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4;">{title}</h3>
+            <h3 style="margin-top: 0; color: #333333; font-size: 16px; margin-bottom: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 15px;">
                 <span style="background-color: #FF6F59; color: #FFFFFF; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block;">🏷️ {price}</span>
             </div>
@@ -131,7 +131,7 @@ templates = {
             <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 260px; object-fit: contain; border: none; outline: none;">
         </a>
     </div>
-    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3;">{title}</h3>
+    <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 18px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="color: #A1887F; font-size: 12px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 50px; overflow: hidden;">{specs}</div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #F59E0B; font-size: 22px; font-weight: 800;">{price}</span>
@@ -140,7 +140,7 @@ templates = {
 </div>
 """
     },
-    "模板 3：多商品轮播 (单行极简)": {
+    "模板 3：多商品轮播 (标准)": {
         "type": "carousel",
         "html": """
 {json_ld}
@@ -153,10 +153,36 @@ templates = {
     <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
         <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
-    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: normal;">{title}</h3>
+    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+    </div>
+</div>
+"""
+    },
+    "模板 5：可滑动轮播 (带指示器)": {
+        "type": "carousel",
+        "html": """
+{json_ld}
+<div style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif;">
+    <div style="position: absolute; top: 0; right: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,0), rgba(253,251,247,1)); border-radius: 0 16px 16px 0; pointer-events: none; z-index: 10; display: flex; align-items: center; justify-content: center;"><span style="color: #D4BBAA; font-size: 24px; font-weight: bold; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">&rsaquo;</span></div>
+    <div style="padding: 20px 10px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none;">
+        <style>div::-webkit-scrollbar { display: none; }</style>
+        {carousel_items}
+        <div style="display: inline-block; width: 20px;"></div>
+    </div>
+</div>
+""",
+        "item_html": """
+<div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-left: 10px; margin-right: 6px; box-sizing: border-box; scroll-snap-align: start;">
+    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
+    </div>
+    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #111111; font-size: 16px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -246,7 +272,17 @@ def extract_product_details(product_url):
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
-    prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: "title", "price", "return_days", "specs" (brief), "cta_text". RULES: NEVER extract shipping fees. {price_hint} Page Text: {text_content}"""
+    
+    # 核心优化 1：强制要求 AI 提取简短的 title (40字以内)，防止单行折叠
+    prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
+    1. "title": Summarize the core product name. Keep it VERY SHORT (Max 40 characters, 5-8 words). Example: "Personalized Family Camping Mug".
+    2. "price"
+    3. "return_days"
+    4. "specs" (brief)
+    5. "cta_text". 
+    RULES: NEVER extract shipping fees. {price_hint} 
+    Page Text: {text_content}"""
+    
     try:
         response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"}, max_tokens=1500)
         result = json.loads(clean_json_response(response.choices[0].message.content))
@@ -307,11 +343,8 @@ def push_cards_to_wp_h2(wp_url, username, password, post_id, cards_html_list):
     except Exception as e: 
         return False, f"读取异常: {e}"
 
-    # 包装为标准的 Custom HTML 区块
     formatted_cards = [f'\n<!-- wp:html -->\n{card}\n<!-- /wp:html -->\n' for card in cards_html_list]
     
-    # 【核心修复】：使用非贪婪匹配，把古腾堡区块外壳(<!-- wp:heading -->)和内部的<h2>作为一个完整的整体进行切割
-    # 这样卡片就会被插入在这个整体的外面，绝对不会污染破坏区块！
     pattern = r'((?:<!--\s*wp:heading[\s\S]*?-->\s*)?<h2[^>]*>)'
     parts = re.split(pattern, current_content, flags=re.IGNORECASE)
     
@@ -477,7 +510,18 @@ if st.session_state.step >= 4:
     if st.session_state.output_mode == "card" and templates[st.session_state.selected_template]["type"] == "carousel" and all_extracted_data:
         st.markdown("**📝 以下是包含所有勾选商品的轮播图代码组件**")
         ld_script = generate_carousel_json_ld(all_extracted_data)
-        carousel_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(image_url=data.get("image_url", ""), title=data.get("title", ""), price=data.get("price", ""), buy_link=data.get("buy_link", ""), cta_text=data.get("cta_text", "Buy Now")) for data in all_extracted_data])
+        
+        # 核心优化 2：统一提取第一个商品的 CTA 按钮文本，应用到整个轮播图的所有商品
+        unified_cta_text = all_extracted_data[0].get("cta_text", "Buy Now") if len(all_extracted_data) > 0 else "Buy Now"
+        
+        carousel_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(
+            image_url=data.get("image_url", ""), 
+            title=data.get("title", ""), 
+            price=data.get("price", ""), 
+            buy_link=data.get("buy_link", ""), 
+            cta_text=unified_cta_text  # 强制应用统一文案
+        ) for data in all_extracted_data])
+        
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         st.session_state.generated_cards_list = [final_carousel_html]
         c1, c2 = st.columns([1, 1], gap="large")
