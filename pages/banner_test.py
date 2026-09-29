@@ -51,7 +51,6 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
-    # 局部导入 OpenAI，避免模块未加载时的全局报错
     from openai import OpenAI
     client_ds = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
 else:
@@ -115,49 +114,27 @@ def create_banner_collage(image_urls):
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-# ================= AI 生图核心函数 (局部导入防崩溃) =================
-def generate_image_openai(prompt: str) -> bytes:
-    if "OPENAI_API_KEY" not in st.secrets: raise Exception("未配置 OPENAI_API_KEY")
-    # 局部导入
+# ================= 兼容中转的 AI 生图核心函数 =================
+def generate_image_openai_proxy(prompt: str, api_key: str, base_url: str, model_name: str) -> bytes:
+    if not api_key: raise Exception("未配置 API Key")
     from openai import OpenAI
     
-    oai_base = st.secrets.get("OPENAI_PROXY_URL", "https://api.openai.com/v1") 
-    client_oai = OpenAI(api_key=st.secrets["OPENAI_API_KEY"], base_url=oai_base)
-    response = client_oai.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
+    # 强制将 url 处理为标准的 proxy 形式
+    if not base_url: base_url = "https://api.openai.com/v1"
+    
+    client_oai = OpenAI(api_key=api_key, base_url=base_url)
+    
+    # 注意：很多中转代理生成图片比较慢，timeout 需要设置长一点
+    response = client_oai.images.generate(
+        model=model_name, 
+        prompt=prompt, 
+        size="1024x1024", 
+        quality="standard", 
+        n=1,
+        timeout=60.0
+    )
     return requests.get(response.data[0].url).content
 
-def generate_image_gemini(prompt: str) -> bytes:
-    if "GEMINI_API_KEY" not in st.secrets: raise Exception("未配置 GEMINI_API_KEY")
-    
-    try:
-        # 使用全新的 unified SDK 引入方式
-        from google import genai
-        from google.genai import types
-        
-        client_gem = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        result = client_gem.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1, 
-                aspect_ratio="16:9", 
-                output_mime_type="image/jpeg"
-            )
-        )
-        return result.generated_images[0].image.image_bytes
-        
-    except ImportError as e:
-        # 如果统一 SDK 还没装好，则自动无缝降级回退到老款 SDK（极度稳定）
-        import google.generativeai as genai_legacy
-        genai_legacy.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        
-        # 兼容最新 Gemini 免费 API 接口，并限制比例
-        model = genai_legacy.GenerativeModel('gemini-1.5-pro')
-        
-        # NOTE: 针对 Gemini Developer 账号的最优调用方式。由于某些地区的账号在尝试直接请求 
-        # imagen-3 时会被拒绝，这里包装为通过多模态生成并返回图像
-        # 如果这还是报错，说明 Google 的环境完全没有被正确拉取
-        raise Exception(f"环境加载异常或组件缺失，请到 Streamlit Cloud 重启应用 (Reboot App)。底层错误：{str(e)}")
 
 # ================= WordPress 推送函数 =================
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
@@ -269,9 +246,9 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
     
     col_b1, col_b2 = st.columns([1, 1], gap="large")
     with col_b1:
-        st.info("🖼️ 生成文章的特色图 (Banner) / 头图。支持原图拼接或强大的 AI 绘图。")
+        st.info("🖼️ 生成文章的特色图 (Banner) / 头图。")
         
-        banner_mode = st.radio("选择生成方式：", ["🧩 原图智能拼接 (快速免费)", "✨ OpenAI DALL-E 3", "🚀 Gemini Imagen 3"], horizontal=True)
+        banner_mode = st.radio("选择生成方式：", ["🧩 原图智能拼接 (快速免费)", "🤖 第三方中转生图 (OpenAI 协议)"], horizontal=True)
         
         if banner_mode.startswith("🧩"):
             if st.button("🎨 1. 生成拼接 Banner", type="secondary"):
@@ -283,20 +260,34 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
                         st.success("✅ 拼接 Banner 生成成功！")
                     else: st.error("拼图失败。")
         else:
+            with st.expander("⚙️ 中转 API 详细配置", expanded=True):
+                # 默认读取 secrets，如果没配置则允许用户在界面上输入
+                st_api_key = st.secrets.get("OPENAI_API_KEY", "")
+                st_base_url = st.secrets.get("OPENAI_PROXY_URL", "https://api.openai.com/v1")
+                
+                c_key, c_url = st.columns(2)
+                with c_key: user_api_key = st.text_input("🔑 API Key:", value=st_api_key, type="password")
+                with c_url: user_base_url = st.text_input("🔗 Base URL:", value=st_base_url)
+                
+                # 重点：让用户自己输入模型名称，解决找不到 dall-e-3 的问题
+                user_model = st.text_input("🤖 模型名称 (Model):", value="dall-e-3", help="如果报错 model does not exist，请询问你的代理商正确的生图模型名称是什么。")
+
             ai_prompt = st.text_area("输入生图提示词 (Prompt)：", value="A high-quality aesthetic product photography banner featuring...", height=100)
             if st.button("✨ 1. 立即生成 AI 图片", type="secondary"):
-                if not ai_prompt.strip():
-                    st.warning("提示词不能为空！")
+                if not ai_prompt.strip() or not user_api_key:
+                    st.warning("提示词和 API Key 不能为空！")
                 else:
-                    with st.spinner("AI 正在绘图，这通常需要 10-20 秒，请稍候..."):
+                    with st.spinner("AI 正在绘图，这通常需要 10-30 秒，请耐心稍候..."):
                         try:
-                            if "OpenAI" in banner_mode:
-                                st.session_state.b_banner_bytes = generate_image_openai(ai_prompt)
-                            else:
-                                st.session_state.b_banner_bytes = generate_image_gemini(ai_prompt)
+                            st.session_state.b_banner_bytes = generate_image_openai_proxy(
+                                prompt=ai_prompt,
+                                api_key=user_api_key,
+                                base_url=user_base_url,
+                                model_name=user_model
+                            )
                             st.success("✅ AI Banner 生成成功！")
                         except Exception as e:
-                            st.error(f"生图失败: {str(e)}")
+                            st.error(f"生图失败！底层报错: {str(e)}\n\n💡 排查建议：\n1. 请检查你的 Base URL 格式是否正确 (通常以 /v1 结尾)。\n2. 确认你的代理商是否支持你填写的模型名称。\n3. 确认账号内有充足的额度。")
 
         if st.session_state.b_banner_bytes:
             st.image(st.session_state.b_banner_bytes, caption="已生成的 Banner 预览图")
