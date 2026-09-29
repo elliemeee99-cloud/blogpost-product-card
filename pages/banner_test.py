@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
+from google import genai
+from google.genai import types
 import json
 import re
 from urllib.parse import urljoin
@@ -52,9 +54,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
-    client = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
+    client_ds = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
 else:
-    st.error("❌ 未读取到 API Key")
+    st.error("❌ 未读取到 DeepSeek API Key")
     st.stop()
 
 if "b_step" not in st.session_state: st.session_state.b_step = 1
@@ -89,7 +91,7 @@ def fetch_product_list(category_url):
 def ai_match_top_30(blog_text, product_list):
     prompt = f"""Select AS MANY relevant products as possible (up to 30). Blog Post: {blog_text[:3000]} Candidates: {json.dumps(product_list, ensure_ascii=False)} Output JSON array only."""
     try:
-        res = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000).choices[0].message.content.strip()
+        res = client_ds.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000).choices[0].message.content.strip()
         if res.startswith("```"): res = res.split('\n', 1)[1].rsplit('```', 1)[0].strip()
         return json.loads(res)
     except: return product_list[:30]
@@ -114,6 +116,24 @@ def create_banner_collage(image_urls):
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
+# ================= AI 生图核心函数 =================
+def generate_image_openai(prompt: str) -> bytes:
+    if "OPENAI_API_KEY" not in st.secrets: raise Exception("未配置 OPENAI_API_KEY")
+    client_oai = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    response = client_oai.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
+    return requests.get(response.data[0].url).content
+
+def generate_image_gemini(prompt: str) -> bytes:
+    if "GEMINI_API_KEY" not in st.secrets: raise Exception("未配置 GEMINI_API_KEY")
+    client_gem = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    result = client_gem.models.generate_images(
+        model="imagen-3.0-generate-002",
+        prompt=prompt,
+        config=types.GenerateImagesConfig(number_of_images=1, aspect_ratio="16:9", output_mime_type="image/jpeg")
+    )
+    return result.generated_images[0].image.image_bytes
+
+# ================= WordPress 推送函数 =================
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth, media_id, media_url = (username, password), None, ""
@@ -223,17 +243,38 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
     
     col_b1, col_b2 = st.columns([1, 1], gap="large")
     with col_b1:
-        st.info("🖼️ 根据选中的商品主图，利用 Python 自动裁切拼接一张 Banner。")
-        if st.button("🎨 1. 生成 Banner", type="secondary"):
-            with st.spinner("下载原图并拼接中..."):
-                selected_items = [p for p in st.session_state.b_pool if p["url"] in st.session_state.b_urls]
-                banner_data = create_banner_collage([item["thumbnail"] for item in selected_items])
-                if banner_data:
-                    st.session_state.b_banner_bytes = banner_data
-                    st.success("✅ Banner 生成成功！")
-                else: st.error("拼图失败。")
+        st.info("🖼️ 生成文章的特色图 (Banner) / 头图。支持原图拼接或强大的 AI 绘图。")
+        
+        # UI 升级：加入生图引擎选择
+        banner_mode = st.radio("选择生成方式：", ["🧩 原图智能拼接 (快速免费)", "✨ OpenAI DALL-E 3", "🚀 Gemini Imagen 3"], horizontal=True)
+        
+        if banner_mode.startswith("🧩"):
+            if st.button("🎨 1. 生成拼接 Banner", type="secondary"):
+                with st.spinner("下载原图并拼接中..."):
+                    selected_items = [p for p in st.session_state.b_pool if p["url"] in st.session_state.b_urls]
+                    banner_data = create_banner_collage([item["thumbnail"] for item in selected_items])
+                    if banner_data:
+                        st.session_state.b_banner_bytes = banner_data
+                        st.success("✅ 拼接 Banner 生成成功！")
+                    else: st.error("拼图失败。")
+        else:
+            ai_prompt = st.text_area("输入生图提示词 (Prompt)：", value="A high-quality aesthetic product photography banner featuring...", height=100)
+            if st.button("✨ 1. 立即生成 AI 图片", type="secondary"):
+                if not ai_prompt.strip():
+                    st.warning("提示词不能为空！")
+                else:
+                    with st.spinner("AI 正在绘图，这通常需要 10-20 秒，请稍候..."):
+                        try:
+                            if "OpenAI" in banner_mode:
+                                st.session_state.b_banner_bytes = generate_image_openai(ai_prompt)
+                            else:
+                                st.session_state.b_banner_bytes = generate_image_gemini(ai_prompt)
+                            st.success("✅ AI Banner 生成成功！")
+                        except Exception as e:
+                            st.error(f"生图失败: {str(e)}")
+
         if st.session_state.b_banner_bytes:
-            st.image(st.session_state.b_banner_bytes, caption="已生成的 1200x630 Banner 预览图")
+            st.image(st.session_state.b_banner_bytes, caption="已生成的 Banner 预览图")
 
     with col_b2:
         st.info("🚀 选择目标网站，自动更新指定文章或新建博客草稿。")
@@ -244,6 +285,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
+        # 恢复单账号安全加载逻辑
         user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
         
