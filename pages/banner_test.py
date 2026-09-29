@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
-from google import genai
-from google.genai import types
+# 【核心修复】改用适用于个人免费 Key 的 SDK 调用方式
+import google.generativeai as genai
 import json
 import re
 from urllib.parse import urljoin
@@ -119,27 +119,30 @@ def create_banner_collage(image_urls):
 # ================= AI 生图核心函数 =================
 def generate_image_openai(prompt: str) -> bytes:
     if "OPENAI_API_KEY" not in st.secrets: raise Exception("未配置 OPENAI_API_KEY")
-    
-    # 强制指定 base_url 为官方地址，防止被 DeepSeek 环境变量劫持导致 400 报错
-    # 💡 提示：如果你使用了中转代理接口，请在 secrets.toml 加上 OPENAI_PROXY_URL = "https://你的代理地址/v1"
     oai_base = st.secrets.get("OPENAI_PROXY_URL", "https://api.openai.com/v1") 
-    
-    client_oai = OpenAI(
-        api_key=st.secrets["OPENAI_API_KEY"],
-        base_url=oai_base
-    )
+    client_oai = OpenAI(api_key=st.secrets["OPENAI_API_KEY"], base_url=oai_base)
     response = client_oai.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
     return requests.get(response.data[0].url).content
 
 def generate_image_gemini(prompt: str) -> bytes:
     if "GEMINI_API_KEY" not in st.secrets: raise Exception("未配置 GEMINI_API_KEY")
-    client_gem = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-    result = client_gem.models.generate_images(
-        model="imagen-3.0-generate-002",
-        prompt=prompt,
-        config=types.GenerateImagesConfig(number_of_images=1, aspect_ratio="16:9", output_mime_type="image/jpeg")
+    
+    # 核心修复：切换到 Gemini Developer API SDK 模式
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('imagen-3.0-generate-002')
+    
+    # Imagen 3 需要特定的 kwargs 来输出 jpeg
+    result = model.generate_content(
+        prompt,
+        generation_config={
+            "response_mime_type": "image/jpeg"
+        }
     )
-    return result.generated_images[0].image.image_bytes
+    
+    # 获取第一张图的二进制数据
+    # 注意：最新版 SDK 提取图片的路径
+    image_bytes = result.candidates[0].content.parts[0].inline_data.data
+    return image_bytes
 
 # ================= WordPress 推送函数 =================
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
@@ -318,7 +321,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
             elif not wp_user or not wp_pass: st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
-                with st.spinner(f"正在向 {selected_site_name} 推送中..."):
+                with st.spinner(f"正在穿透跳转保护进行推送..."):
                     success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, st.session_state.b_banner_bytes, target_post_id)
                     if success: st.success(f"🎉 {msg}")
                     else: st.error(msg)
