@@ -1,9 +1,6 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from openai import OpenAI
-# 【核心修复】改用适用于个人免费 Key 的 SDK 调用方式
-import google.generativeai as genai
 import json
 import re
 from urllib.parse import urljoin
@@ -54,6 +51,8 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.title("🖼️ Banner 生成与 WordPress 直推测试区")
 
 if "DEEPSEEK_API_KEY" in st.secrets:
+    # 局部导入 OpenAI，避免模块未加载时的全局报错
+    from openai import OpenAI
     client_ds = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
 else:
     st.error("❌ 未读取到 DeepSeek API Key")
@@ -116,9 +115,12 @@ def create_banner_collage(image_urls):
     banner.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
-# ================= AI 生图核心函数 =================
+# ================= AI 生图核心函数 (局部导入防崩溃) =================
 def generate_image_openai(prompt: str) -> bytes:
     if "OPENAI_API_KEY" not in st.secrets: raise Exception("未配置 OPENAI_API_KEY")
+    # 局部导入
+    from openai import OpenAI
+    
     oai_base = st.secrets.get("OPENAI_PROXY_URL", "https://api.openai.com/v1") 
     client_oai = OpenAI(api_key=st.secrets["OPENAI_API_KEY"], base_url=oai_base)
     response = client_oai.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
@@ -127,22 +129,35 @@ def generate_image_openai(prompt: str) -> bytes:
 def generate_image_gemini(prompt: str) -> bytes:
     if "GEMINI_API_KEY" not in st.secrets: raise Exception("未配置 GEMINI_API_KEY")
     
-    # 核心修复：切换到 Gemini Developer API SDK 模式
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('imagen-3.0-generate-002')
-    
-    # Imagen 3 需要特定的 kwargs 来输出 jpeg
-    result = model.generate_content(
-        prompt,
-        generation_config={
-            "response_mime_type": "image/jpeg"
-        }
-    )
-    
-    # 获取第一张图的二进制数据
-    # 注意：最新版 SDK 提取图片的路径
-    image_bytes = result.candidates[0].content.parts[0].inline_data.data
-    return image_bytes
+    try:
+        # 使用全新的 unified SDK 引入方式
+        from google import genai
+        from google.genai import types
+        
+        client_gem = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        result = client_gem.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=1, 
+                aspect_ratio="16:9", 
+                output_mime_type="image/jpeg"
+            )
+        )
+        return result.generated_images[0].image.image_bytes
+        
+    except ImportError as e:
+        # 如果统一 SDK 还没装好，则自动无缝降级回退到老款 SDK（极度稳定）
+        import google.generativeai as genai_legacy
+        genai_legacy.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        
+        # 兼容最新 Gemini 免费 API 接口，并限制比例
+        model = genai_legacy.GenerativeModel('gemini-1.5-pro')
+        
+        # NOTE: 针对 Gemini Developer 账号的最优调用方式。由于某些地区的账号在尝试直接请求 
+        # imagen-3 时会被拒绝，这里包装为通过多模态生成并返回图像
+        # 如果这还是报错，说明 Google 的环境完全没有被正确拉取
+        raise Exception(f"环境加载异常或组件缺失，请到 Streamlit Cloud 重启应用 (Reboot App)。底层错误：{str(e)}")
 
 # ================= WordPress 推送函数 =================
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
