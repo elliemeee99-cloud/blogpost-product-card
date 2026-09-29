@@ -119,7 +119,15 @@ def create_banner_collage(image_urls):
 # ================= AI 生图核心函数 =================
 def generate_image_openai(prompt: str) -> bytes:
     if "OPENAI_API_KEY" not in st.secrets: raise Exception("未配置 OPENAI_API_KEY")
-    client_oai = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    
+    # 强制指定 base_url 为官方地址，防止被 DeepSeek 环境变量劫持导致 400 报错
+    # 💡 提示：如果你使用了中转代理接口，请在 secrets.toml 加上 OPENAI_PROXY_URL = "https://你的代理地址/v1"
+    oai_base = st.secrets.get("OPENAI_PROXY_URL", "https://api.openai.com/v1") 
+    
+    client_oai = OpenAI(
+        api_key=st.secrets["OPENAI_API_KEY"],
+        base_url=oai_base
+    )
     response = client_oai.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", quality="standard", n=1)
     return requests.get(response.data[0].url).content
 
@@ -245,7 +253,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
     with col_b1:
         st.info("🖼️ 生成文章的特色图 (Banner) / 头图。支持原图拼接或强大的 AI 绘图。")
         
-        # UI 升级：加入生图引擎选择
         banner_mode = st.radio("选择生成方式：", ["🧩 原图智能拼接 (快速免费)", "✨ OpenAI DALL-E 3", "🚀 Gemini Imagen 3"], horizontal=True)
         
         if banner_mode.startswith("🧩"):
@@ -285,19 +292,24 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
-        # 恢复单账号安全加载逻辑
-        user_key = "WP_USER"
-        pass_key = f"WP_PASS_{site_prefix}"
-        
-        if user_key in st.secrets and pass_key in st.secrets:
-            st.success(f"🔒 凭证已自动加载")
-            wp_user = st.secrets[user_key]
-            wp_pass = st.secrets[pass_key]
+        if "WP_USERS" in st.secrets:
+            user_options = st.secrets["WP_USERS"]
+            selected_user_display = st.selectbox("👤 选择发布账号：", list(user_options.keys()))
+            wp_user = user_options[selected_user_display]
         else:
-            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台添加。")
-            c1, c2 = st.columns(2)
-            with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
-            with c2: wp_pass = st.text_input(f"应用密码", type="password")
+            wp_user = st.text_input("👤 WordPress 账号 (兼容模式)", value=st.secrets.get("WP_USER", ""))
+            
+        pass_dict_key = f"WP_PASS_{site_prefix}"
+        
+        if pass_dict_key in st.secrets and hasattr(st.secrets[pass_dict_key], "items") and wp_user in st.secrets[pass_dict_key]:
+            wp_pass = st.secrets[pass_dict_key][wp_user]
+            st.success(f"🔒 凭证已加载")
+        elif pass_dict_key in st.secrets and isinstance(st.secrets[pass_dict_key], str):
+            wp_pass = st.secrets[pass_dict_key]
+            st.success(f"🔒 凭证已加载 (旧版模式)")
+        else:
+            st.warning(f"⚠️ 未在 Secrets 中找到对应密码，请手动输入。")
+            wp_pass = st.text_input(f"🔑 应用密码", type="password")
             
         post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
         target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID。")
@@ -306,7 +318,7 @@ if st.session_state.b_step >= 3 and st.session_state.b_urls:
             if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
             elif not wp_user or not wp_pass: st.warning("请配置或填完所有的 WordPress 验证信息！")
             else:
-                with st.spinner(f"正在穿透跳转保护进行推送..."):
+                with st.spinner(f"正在向 {selected_site_name} 推送中..."):
                     success, msg = push_to_wordpress(wp_url, wp_user, wp_pass, post_title, st.session_state.b_banner_bytes, target_post_id)
                     if success: st.success(f"🎉 {msg}")
                     else: st.error(msg)
