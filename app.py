@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components  # 【核心修复】引入真实浏览器渲染组件
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
@@ -79,13 +80,12 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 180px;">
-    <!-- 优化：强制不换行，左侧图片定宽45%满幅填充，去掉白边，加上独立圆角 -->
-    <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
-            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
+    <!-- 优化：改为 contain 并在图片周围加一点留白，防止商品边缘被粗暴裁切 -->
+    <div style="flex: 0 0 45%; max-width: 45%; padding: 12px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-radius: 12px 0 0 12px; border-right: 1px solid #eaeaea;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%;">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; border: none; margin: 0 auto; display: block;">
         </a>
     </div>
-    <!-- 优化：右侧字体全部调小，间距收缩 -->
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
@@ -106,13 +106,12 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 160px;">
-    <!-- 优化：强制不换行，左侧图片定宽45%满幅填充 -->
-    <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
-            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
+    <!-- 优化：改为 contain 并在图片周围加一点留白，防止商品边缘被粗暴裁切 -->
+    <div style="flex: 0 0 45%; max-width: 45%; padding: 12px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-radius: 12px 0 0 12px; border-right: 1px solid #eaeaea;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%;">
+            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; border: none; margin: 0 auto; display: block;">
         </a>
     </div>
-    <!-- 优化：右侧字体缩小 -->
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
@@ -170,12 +169,12 @@ templates = {
         "html": """
 {json_ld}
 <div class="callie-carousel-wrapper" style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif; overflow: hidden;">
-    <!-- 优化：移除容易被WP拦截的 inline onclick，改用底层安全的 JavaScript 事件绑定 -->
-    <div class="scroll-left" style="position: absolute; left: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 10; display: flex; align-items: center; justify-content: flex-start; padding-left: 6px; cursor: pointer;">
+    <!-- 核心修复：双保险点击绑定，既有 inline onclick (在后台测试生效)，也有底部 script 监听 (在WP前端生效) -->
+    <div class="scroll-left" onclick="var b=this.parentElement.querySelector('.scroll-box'); if(b) b.scrollBy({{left: -240, behavior: 'smooth'}});" style="position: absolute; left: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 20; display: flex; align-items: center; justify-content: flex-start; padding-left: 6px; cursor: pointer;">
         <span style="color: #D4BBAA; font-size: 32px; font-weight: bold; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">&#10094;</span>
     </div>
     
-    <div class="scroll-right" style="position: absolute; right: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to left, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 10; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; cursor: pointer;">
+    <div class="scroll-right" onclick="var b=this.parentElement.querySelector('.scroll-box'); if(b) b.scrollBy({{left: 240, behavior: 'smooth'}});" style="position: absolute; right: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to left, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 20; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; cursor: pointer;">
         <span style="color: #D4BBAA; font-size: 32px; font-weight: bold; pointer-events: none; text-shadow: -1px 1px 2px rgba(0,0,0,0.1);">&#10095;</span>
     </div>
 
@@ -297,7 +296,6 @@ def extract_product_details(product_url):
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 核心优化：加入 CRITICAL 原语种约束，强制要求 AI 原样保留语种
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
     1. "title": Summarize the product name. Keep it VERY SHORT (Max 40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is German, output German). DO NOT translate to English.
     2. "price": The true product price exactly as written.
@@ -475,7 +473,6 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
     if mode_choice.startswith("🎨"):
         st.session_state.output_mode = "card"
         
-        # 将预览用的 specs 替换为规范的列表展示格式
         dummy_data = {
             "image_url": dummy_image, 
             "title": "Custom Halloween Decoration", 
@@ -491,7 +488,11 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
             with col:
                 st.markdown(f"**{tmpl_name}**")
                 preview_html = tmpl_data["html"].replace("{carousel_items}", tmpl_data.get("item_html","").format(**dummy_data) * 3).format(**dummy_data) if tmpl_data["type"] == "carousel" else tmpl_data["html"].format(**dummy_data)
-                st.html(f'<div style="height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid #DADCE0; border-radius: 8px; padding: 10px; background: #fff;"><div style="transform: scale(0.75); transform-origin: top left; width: 133%;">{preview_html}</div></div>')
+                
+                # 【核心修复】：在步骤 3 使用真正的 html 组件来预览，确保排版和交互与线上 100% 一致！
+                wrapped_html = f"<html><body style='margin:0; padding:10px; background:#fff; font-family:sans-serif;'>{preview_html}</body></html>"
+                components.html(wrapped_html, height=380, scrolling=True)
+                
                 if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
                     st.session_state.selected_template = tmpl_name
                     st.session_state.step = 4
@@ -515,7 +516,6 @@ if st.session_state.step >= 4:
         if details_data:
             raw_specs = details_data.get("specs", "")
             
-            # 针对不同的提取结果，强制组装为对齐的 <ul><li> 列表格式
             if isinstance(raw_specs, dict):
                 specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
             elif isinstance(raw_specs, list):
@@ -534,7 +534,9 @@ if st.session_state.step >= 4:
                 generated_single_cards.append(raw_img_html)
                 st.markdown(f"**📝 原图预览: {details_data.get('title', item['title'])}**")
                 c1, c2 = st.columns([1, 1], gap="large")
-                with c1: st.html(raw_img_html)
+                
+                # 【核心修复】：在步骤 4 也使用真实的组件渲染
+                with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{raw_img_html}</body></html>", height=450, scrolling=True)
                 with c2: 
                     with st.expander("💻 点击展开 / 复制 HTML 代码"): st.code(raw_img_html, language='html')
                 st.write("---") 
@@ -545,7 +547,9 @@ if st.session_state.step >= 4:
                     generated_single_cards.append(card_html)
                     st.markdown(f"**📝 卡片预览: {details_data.get('title', item['title'])}**")
                     c1, c2 = st.columns([1, 1], gap="large")
-                    with c1: st.html(f'<div style="max-height: 450px; overflow-y: auto;">{card_html}</div>')
+                    
+                    # 【核心修复】：使用组件渲染，使得 JS 交互生效
+                    with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{card_html}</body></html>", height=400, scrolling=True)
                     with c2: 
                         with st.expander("💻 点击展开 / 复制完整 HTML 代码"): st.code(card_html, language='html')
                     st.write("---") 
@@ -568,7 +572,9 @@ if st.session_state.step >= 4:
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         st.session_state.generated_cards_list = [final_carousel_html]
         c1, c2 = st.columns([1, 1], gap="large")
-        with c1: st.html(f'<div style="max-height: 450px; overflow-y: auto;">{final_carousel_html}</div>')
+        
+        # 【核心修复】：通过组件渲染轮播图，点击箭头绝对生效！
+        with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=350, scrolling=True)
         with c2: 
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"): st.code(final_carousel_html, language='html')
     elif generated_single_cards:
