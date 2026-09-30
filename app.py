@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components  # 【核心修复】引入真实浏览器渲染组件
 import requests
 from bs4 import BeautifulSoup
 from openai import OpenAI
@@ -66,7 +65,7 @@ else:
 
 if "matched_products" not in st.session_state: st.session_state.matched_products = []
 if "step" not in st.session_state: st.session_state.step = 1
-if "selected_urls" not in st.session_state: st.session_state.selected_urls = []
+if "selected_keys" not in st.session_state: st.session_state.selected_keys = [] # 优化：改用独立候选键以区分同一产品的不同图片
 if "output_mode" not in st.session_state: st.session_state.output_mode = "card"
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 if "generated_cards_list" not in st.session_state: st.session_state.generated_cards_list = []
@@ -80,10 +79,9 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 180px;">
-    <!-- 优化：改为 contain 并在图片周围加一点留白，防止商品边缘被粗暴裁切 -->
-    <div style="flex: 0 0 45%; max-width: 45%; padding: 12px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-radius: 12px 0 0 12px; border-right: 1px solid #eaeaea;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%;">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; border: none; margin: 0 auto; display: block;">
+    <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
     </div>
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
@@ -106,10 +104,9 @@ templates = {
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 160px;">
-    <!-- 优化：改为 contain 并在图片周围加一点留白，防止商品边缘被粗暴裁切 -->
-    <div style="flex: 0 0 45%; max-width: 45%; padding: 12px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; border-radius: 12px 0 0 12px; border-right: 1px solid #eaeaea;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%;">
-            <img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; border: none; margin: 0 auto; display: block;">
+    <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
+        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
     </div>
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
@@ -169,7 +166,6 @@ templates = {
         "html": """
 {json_ld}
 <div class="callie-carousel-wrapper" style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif; overflow: hidden;">
-    <!-- 核心修复：双保险点击绑定，既有 inline onclick (在后台测试生效)，也有底部 script 监听 (在WP前端生效) -->
     <div class="scroll-left" onclick="var b=this.parentElement.querySelector('.scroll-box'); if(b) b.scrollBy({{left: -240, behavior: 'smooth'}});" style="position: absolute; left: 0; top: 0; bottom: 0; width: 40px; background: linear-gradient(to right, rgba(253,251,247,1) 40%, rgba(253,251,247,0)); z-index: 20; display: flex; align-items: center; justify-content: flex-start; padding-left: 6px; cursor: pointer;">
         <span style="color: #D4BBAA; font-size: 32px; font-weight: bold; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">&#10094;</span>
     </div>
@@ -246,24 +242,64 @@ def fetch_product_list(category_url):
                 if src:
                     img_url = urljoin(category_url, src).split('?')[0]
                     seen_urls.add(clean_url)
-                    products.append({"title": title, "url": clean_url, "thumbnail": img_url})
+                    # 补充 candidate_key 保证结构统一
+                    products.append({"title": title, "url": clean_url, "thumbnail": img_url, "candidate_key": f"{clean_url}###0"})
                     if len(products) >= 60: break
     return products
 
+# 【核心更新】针对手动直达模式，深入页面抓取最多 4 张图片组建备选池
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
-    products = []
+    candidates = []
+    
     for url in urls:
         clean_url = url.split('?')[0]
         soup = get_soup(clean_url)
         if soup:
             title = soup.title.string if soup.title else "未命名商品"
-            img_url = dummy_image
+            title = title.replace('\n', ' ').strip()
+            imgs = []
+            
+            # 1. 优先拿 og:image 主图
             og_img = soup.find('meta', property='og:image')
             if og_img and og_img.get('content'):
-                img_url = urljoin(clean_url, og_img['content']).split('?')[0]
-            products.append({"title": title, "url": clean_url, "thumbnail": img_url})
-    return products
+                imgs.append(urljoin(clean_url, og_img['content']).split('?')[0])
+
+            # 2. 遍历页面上寻找高质量产品相册图
+            uploads_imgs = []
+            other_imgs = []
+            for img in soup.find_all('img'):
+                src = img.get('data-src') or img.get('src')
+                if src and isinstance(src, str):
+                    lower_src = src.lower()
+                    # 过滤掉明显的 SVG 和图标
+                    if not lower_src.endswith('.svg') and not lower_src.endswith('.gif') and 'logo' not in lower_src and 'icon' not in lower_src:
+                        full_img_url = urljoin(clean_url, src).split('?')[0]
+                        if full_img_url not in imgs and full_img_url not in uploads_imgs and full_img_url not in other_imgs:
+                            # 启发式判断：Callie 电商相册图常带有 uploads 目录
+                            if 'uploads' in lower_src or 'product' in lower_src:
+                                uploads_imgs.append(full_img_url)
+                            else:
+                                other_imgs.append(full_img_url)
+                                
+            # 组合优先顺序，最多保留 4 张
+            for u in uploads_imgs:
+                if len(imgs) < 4: imgs.append(u)
+            for o in other_imgs:
+                if len(imgs) < 4: imgs.append(o)
+                
+            if not imgs:
+                imgs.append(dummy_image)
+
+            # 把这几张图全部转化为平铺的候选对象
+            for idx, img_url in enumerate(imgs[:4]):
+                candidates.append({
+                    "title": title,
+                    "url": clean_url,
+                    "thumbnail": img_url,
+                    "candidate_key": f"{clean_url}###{idx}"  # 关键绑定标识
+                })
+    return candidates
 
 def clean_json_response(content):
     content = content.strip()
@@ -281,16 +317,21 @@ def ai_match_top_30(blog_text, product_list):
         return json.loads(clean_json_response(response.choices[0].message.content))
     except: return product_list[:30]
 
-def extract_product_details(product_url):
+# 【透传更新】接收预先选择好的图片 (preselected_image)
+def extract_product_details(product_url, preselected_image=None):
     soup = get_soup(product_url)
     if not soup: return None
-    main_image = ""
-    og_img = soup.find('meta', property='og:image')
-    if og_img and og_img.get('content'): main_image = og_img['content']
-    else:
-        img_tag = soup.find('img')
-        if img_tag: main_image = img_tag.get('data-src') or img_tag.get('src', '')
-    main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
+    
+    # 直接使用我们在步骤2挑好的图！无需重新在页面里找首图了
+    main_image = preselected_image if preselected_image and preselected_image != dummy_image else ""
+    
+    if not main_image:
+        og_img = soup.find('meta', property='og:image')
+        if og_img and og_img.get('content'): main_image = og_img['content']
+        else:
+            img_tag = soup.find('img')
+            if img_tag: main_image = img_tag.get('data-src') or img_tag.get('src', '')
+        main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
     
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
@@ -431,17 +472,20 @@ with tab1:
                 if pool:
                     raw_top_30 = ai_match_top_30(blog_text, pool)
                     st.session_state.matched_products = [item for item in (raw_top_30 if isinstance(raw_top_30, list) else []) if isinstance(item, dict) and "url" in item]
-                    for p in st.session_state.matched_products: p.setdefault("thumbnail", dummy_image)
+                    for p in st.session_state.matched_products: 
+                        p.setdefault("thumbnail", dummy_image)
+                        p.setdefault("candidate_key", f"{p['url']}###0") # 为 AI 模式补齐独立 Key
                     if st.session_state.matched_products:
                         st.session_state.step = 2
                         st.rerun()
 
 with tab2:
-    st.info("💡 如果不需要给 Blog 找对应的商品，请直接在下方粘贴商品详情页链接。一行一个。")
+    st.info("💡 直接粘贴商品详情页链接（一行一个），系统将自动为每个商品抓取最多 4 张高品质图片供你挑选。")
     direct_urls = st.text_area("输入商品链接：", height=150)
-    if st.button("🚀 直接获取这些商品信息", type="primary"):
+    if st.button("🚀 直接获取商品候选图", type="primary"):
         if direct_urls.strip():
-            with st.spinner("正在解析您提供的链接，请稍候..."):
+            with st.spinner("正在深入页面解析图片相册，请稍候..."):
+                # 获取带有 candidate_key 结构的图片全家桶
                 st.session_state.matched_products = fetch_direct_urls(direct_urls)
                 if st.session_state.matched_products:
                     st.session_state.step = 2
@@ -450,23 +494,29 @@ with tab2:
 if st.session_state.step >= 2 and st.session_state.matched_products:
     st.markdown("### 步骤 2：人工确认生成名单")
     with st.form("selection_form"):
-        temp_selected = []
-        cols_per_row = 10
+        temp_selected_keys = []
+        cols_per_row = 8
         for i in range(0, len(st.session_state.matched_products), cols_per_row):
             row_items = st.session_state.matched_products[i:i+cols_per_row]
             cols = st.columns(cols_per_row)
             for col, item in zip(cols, row_items):
                 with col:
                     st.image(item["thumbnail"], use_container_width=True)
-                    if st.checkbox("选择", key=f"chk_{item['url']}"): temp_selected.append(item["url"])
+                    # 友好提示长标题
+                    display_title = item['title'][:15] + "..." if len(item['title']) > 15 else item['title']
+                    st.caption(f"{display_title}")
+                    
+                    # UI 更新：此时所有的选择绑定都在特有的 candidate_key 上
+                    if st.checkbox("选择此图", key=f"chk_{item['candidate_key']}"): 
+                        temp_selected_keys.append(item["candidate_key"])
             st.write("") 
         if st.form_submit_button("➡️ 确认选中，进入下一步", type="primary"):
-            if temp_selected:
-                st.session_state.selected_urls = temp_selected
+            if temp_selected_keys:
+                st.session_state.selected_keys = temp_selected_keys
                 st.session_state.step = 3
                 st.rerun()
 
-if st.session_state.step >= 3 and st.session_state.selected_urls:
+if st.session_state.step >= 3 and st.session_state.selected_keys:
     st.markdown("### 步骤 3：选择数据输出模式")
     mode_choice = st.radio("请选择：", ["🎨 生成高转化商品卡片 (包含完整排版与样式)", "🖼️ 仅生成纯净原图 (纯粹 SEO 优化，抗干扰)"], horizontal=True, label_visibility="collapsed")
     
@@ -489,9 +539,8 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
                 st.markdown(f"**{tmpl_name}**")
                 preview_html = tmpl_data["html"].replace("{carousel_items}", tmpl_data.get("item_html","").format(**dummy_data) * 3).format(**dummy_data) if tmpl_data["type"] == "carousel" else tmpl_data["html"].format(**dummy_data)
                 
-                # 【核心修复】：在步骤 3 使用真正的 html 组件来预览，确保排版和交互与线上 100% 一致！
                 wrapped_html = f"<html><body style='margin:0; padding:10px; background:#fff; font-family:sans-serif;'>{preview_html}</body></html>"
-                components.html(wrapped_html, height=380, scrolling=True)
+                st.components.v1.html(wrapped_html, height=380, scrolling=True)
                 
                 if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
                     st.session_state.selected_template = tmpl_name
@@ -506,13 +555,17 @@ if st.session_state.step >= 3 and st.session_state.selected_urls:
 
 if st.session_state.step >= 4:
     st.markdown("### 步骤 4：最终生成结果")
-    selected_items = [p for p in st.session_state.matched_products if p["url"] in st.session_state.selected_urls]
+    
+    # 【核心筛选透传】：只提取被选中的那一组字典，保证对应的特定图象 URL 跟随下去
+    selected_items = [p for p in st.session_state.matched_products if p.get("candidate_key") in st.session_state.selected_keys]
+    
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     all_extracted_data = []
     generated_single_cards = [] 
     
     for i, item in enumerate(selected_items):
-        details_data = extract_product_details(item["url"])
+        # 将被选中的那一帧具体的图片透传给 AI 提取器
+        details_data = extract_product_details(item["url"], preselected_image=item["thumbnail"])
         if details_data:
             raw_specs = details_data.get("specs", "")
             
@@ -534,9 +587,7 @@ if st.session_state.step >= 4:
                 generated_single_cards.append(raw_img_html)
                 st.markdown(f"**📝 原图预览: {details_data.get('title', item['title'])}**")
                 c1, c2 = st.columns([1, 1], gap="large")
-                
-                # 【核心修复】：在步骤 4 也使用真实的组件渲染
-                with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{raw_img_html}</body></html>", height=450, scrolling=True)
+                with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{raw_img_html}</body></html>", height=450, scrolling=True)
                 with c2: 
                     with st.expander("💻 点击展开 / 复制 HTML 代码"): st.code(raw_img_html, language='html')
                 st.write("---") 
@@ -547,9 +598,7 @@ if st.session_state.step >= 4:
                     generated_single_cards.append(card_html)
                     st.markdown(f"**📝 卡片预览: {details_data.get('title', item['title'])}**")
                     c1, c2 = st.columns([1, 1], gap="large")
-                    
-                    # 【核心修复】：使用组件渲染，使得 JS 交互生效
-                    with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{card_html}</body></html>", height=400, scrolling=True)
+                    with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{card_html}</body></html>", height=400, scrolling=True)
                     with c2: 
                         with st.expander("💻 点击展开 / 复制完整 HTML 代码"): st.code(card_html, language='html')
                     st.write("---") 
@@ -572,9 +621,7 @@ if st.session_state.step >= 4:
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         st.session_state.generated_cards_list = [final_carousel_html]
         c1, c2 = st.columns([1, 1], gap="large")
-        
-        # 【核心修复】：通过组件渲染轮播图，点击箭头绝对生效！
-        with c1: components.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=350, scrolling=True)
+        with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=350, scrolling=True)
         with c2: 
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"): st.code(final_carousel_html, language='html')
     elif generated_single_cards:
