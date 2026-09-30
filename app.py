@@ -9,7 +9,7 @@ from urllib.parse import urljoin
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
 
-# 🎨 UI 视觉重构：Google Material Design 规范
+# 🎨 UI 视觉重构：Google Material Design 规范 & 按钮强效变白
 st.markdown("""
 <style>
 .stApp { background-color: #F8F9FA; color: #202124; font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; }
@@ -23,10 +23,13 @@ h3 { font-size: 1.2rem !important; }
 [data-testid="stPageLink-NavLink"]:hover { background-color: #F1F3F4; border-color: #DADCE0; }
 [data-testid="stPageLink-NavLink"] p { color: #1A73E8 !important; }
 
+/* 修复按钮字体颜色问题 */
 .stButton > button { border-radius: 4px !important; border: none !important; font-weight: 500 !important; padding: 8px 24px !important; transition: all 0.2s ease !important; }
-.stButton > button[kind="primary"] { background-color: #1A73E8 !important; box-shadow: none !important; }
-.stButton > button[kind="primary"] * { color: #FFFFFF !important; }
+.stButton > button[kind="primary"] { background-color: #1A73E8 !important; color: #FFFFFF !important; box-shadow: none !important; }
+.stButton > button[kind="primary"] * { color: #FFFFFF !important; fill: #FFFFFF !important; }
+.stButton > button[kind="primary"] p, .stButton > button[kind="primary"] span { color: #FFFFFF !important; }
 .stButton > button[kind="primary"]:hover { background-color: #174EA6 !important; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important; }
+
 .stButton > button[kind="secondary"] { background: #FFFFFF !important; border: 1px solid #DADCE0 !important; }
 .stButton > button[kind="secondary"] * { color: #1A73E8 !important; }
 .stButton > button[kind="secondary"]:hover { background: #F1F3F4 !important; }
@@ -65,7 +68,7 @@ else:
 
 if "matched_products" not in st.session_state: st.session_state.matched_products = []
 if "step" not in st.session_state: st.session_state.step = 1
-if "selected_keys" not in st.session_state: st.session_state.selected_keys = [] # 优化：改用独立候选键以区分同一产品的不同图片
+if "selected_keys" not in st.session_state: st.session_state.selected_keys = [] 
 if "output_mode" not in st.session_state: st.session_state.output_mode = "card"
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
 if "generated_cards_list" not in st.session_state: st.session_state.generated_cards_list = []
@@ -240,14 +243,16 @@ def fetch_product_list(category_url):
             if img:
                 src = img.get('data-src') or img.get('src')
                 if src:
-                    img_url = urljoin(category_url, src).split('?')[0]
-                    seen_urls.add(clean_url)
-                    # 补充 candidate_key 保证结构统一
-                    products.append({"title": title, "url": clean_url, "thumbnail": img_url, "candidate_key": f"{clean_url}###0"})
-                    if len(products) >= 60: break
+                    # AI 海选模式的基础过滤
+                    src_lower = str(src).lower()
+                    if not any(x in src_lower for x in ['logo', 'icon', 'svg', 'gif']):
+                        img_url = urljoin(category_url, src).split('?')[0]
+                        seen_urls.add(clean_url)
+                        products.append({"title": title, "url": clean_url, "thumbnail": img_url, "candidate_key": f"{clean_url}###0"})
+                        if len(products) >= 60: break
     return products
 
-# 【核心更新】针对手动直达模式，深入页面抓取最多 4 张图片组建备选池
+# 【核心更新】漏斗式防误抓取图集算法
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     candidates = []
@@ -258,46 +263,52 @@ def fetch_direct_urls(url_list_text):
         if soup:
             title = soup.title.string if soup.title else "未命名商品"
             title = title.replace('\n', ' ').strip()
-            imgs = []
             
-            # 1. 优先拿 og:image 主图
+            valid_imgs = []
+            
+            # 1. 第一优先级：提取精准的 OpenGraph 主图
             og_img = soup.find('meta', property='og:image')
             if og_img and og_img.get('content'):
-                imgs.append(urljoin(clean_url, og_img['content']).split('?')[0])
-
-            # 2. 遍历页面上寻找高质量产品相册图
-            uploads_imgs = []
-            other_imgs = []
+                valid_imgs.append(urljoin(clean_url, og_img['content']).split('?')[0])
+            
+            # 2. 第二优先级：遍历并严格过滤相册图
             for img in soup.find_all('img'):
-                src = img.get('data-src') or img.get('src')
-                if src and isinstance(src, str):
-                    lower_src = src.lower()
-                    # 过滤掉明显的 SVG 和图标
-                    if not lower_src.endswith('.svg') and not lower_src.endswith('.gif') and 'logo' not in lower_src and 'icon' not in lower_src:
-                        full_img_url = urljoin(clean_url, src).split('?')[0]
-                        if full_img_url not in imgs and full_img_url not in uploads_imgs and full_img_url not in other_imgs:
-                            # 启发式判断：Callie 电商相册图常带有 uploads 目录
-                            if 'uploads' in lower_src or 'product' in lower_src:
-                                uploads_imgs.append(full_img_url)
-                            else:
-                                other_imgs.append(full_img_url)
-                                
-            # 组合优先顺序，最多保留 4 张
-            for u in uploads_imgs:
-                if len(imgs) < 4: imgs.append(u)
-            for o in other_imgs:
-                if len(imgs) < 4: imgs.append(o)
+                src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+                if not src: continue
                 
-            if not imgs:
-                imgs.append(dummy_image)
-
-            # 把这几张图全部转化为平铺的候选对象
-            for idx, img_url in enumerate(imgs[:4]):
+                src_lower = str(src).lower()
+                img_class = " ".join(img.get('class', [])).lower()
+                parent_class = " ".join(img.parent.get('class', [])).lower() if img.parent else ""
+                
+                # 黑名单：彻底屏蔽 Logo、视频按钮、占位符、页脚图标等
+                is_bad = any(x in src_lower or x in img_class or x in parent_class for x in [
+                    'logo', 'icon', 'svg', 'gif', 'badge', 'avatar', 'footer', 'header', 'menu', 
+                    'video', 'play', 'mp4', 'youtube', 'vimeo', 'trust', 'payment'
+                ])
+                if is_bad: continue
+                
+                # 白名单：只允许主流照片格式
+                if not any(ext in src_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                    continue
+                    
+                full_url = urljoin(clean_url, src).split('?')[0]
+                
+                # 权重提权：电商网站的商品原图通常储存在包含 uploads 或 product 的目录下
+                if 'uploads' in full_url.lower() or 'product' in full_url.lower():
+                    if full_url not in valid_imgs:
+                        valid_imgs.append(full_url)
+            
+            # 兜底：如果过滤得太干净一张图都没了，放一张占位图
+            if not valid_imgs:
+                valid_imgs.append(dummy_image)
+                
+            # 严格截断：无论网页多长，每个商品只取通过筛选的前 4 张图片（排除底部推荐商品）
+            for idx, img_url in enumerate(valid_imgs[:4]):
                 candidates.append({
                     "title": title,
                     "url": clean_url,
                     "thumbnail": img_url,
-                    "candidate_key": f"{clean_url}###{idx}"  # 关键绑定标识
+                    "candidate_key": f"{clean_url}###{idx}" 
                 })
     return candidates
 
@@ -317,12 +328,10 @@ def ai_match_top_30(blog_text, product_list):
         return json.loads(clean_json_response(response.choices[0].message.content))
     except: return product_list[:30]
 
-# 【透传更新】接收预先选择好的图片 (preselected_image)
 def extract_product_details(product_url, preselected_image=None):
     soup = get_soup(product_url)
     if not soup: return None
     
-    # 直接使用我们在步骤2挑好的图！无需重新在页面里找首图了
     main_image = preselected_image if preselected_image and preselected_image != dummy_image else ""
     
     if not main_image:
@@ -474,18 +483,17 @@ with tab1:
                     st.session_state.matched_products = [item for item in (raw_top_30 if isinstance(raw_top_30, list) else []) if isinstance(item, dict) and "url" in item]
                     for p in st.session_state.matched_products: 
                         p.setdefault("thumbnail", dummy_image)
-                        p.setdefault("candidate_key", f"{p['url']}###0") # 为 AI 模式补齐独立 Key
+                        p.setdefault("candidate_key", f"{p['url']}###0")
                     if st.session_state.matched_products:
                         st.session_state.step = 2
                         st.rerun()
 
 with tab2:
-    st.info("💡 直接粘贴商品详情页链接（一行一个），系统将自动为每个商品抓取最多 4 张高品质图片供你挑选。")
+    st.info("💡 直接粘贴商品详情页链接（一行一个），系统将自动过滤无关元素，并为每个商品精准抓取最多 4 张高品质图片供你挑选。")
     direct_urls = st.text_area("输入商品链接：", height=150)
     if st.button("🚀 直接获取商品候选图", type="primary"):
         if direct_urls.strip():
-            with st.spinner("正在深入页面解析图片相册，请稍候..."):
-                # 获取带有 candidate_key 结构的图片全家桶
+            with st.spinner("正在深入页面智能排雷并解析相册，请稍候..."):
                 st.session_state.matched_products = fetch_direct_urls(direct_urls)
                 if st.session_state.matched_products:
                     st.session_state.step = 2
@@ -502,11 +510,9 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
             for col, item in zip(cols, row_items):
                 with col:
                     st.image(item["thumbnail"], use_container_width=True)
-                    # 友好提示长标题
                     display_title = item['title'][:15] + "..." if len(item['title']) > 15 else item['title']
                     st.caption(f"{display_title}")
                     
-                    # UI 更新：此时所有的选择绑定都在特有的 candidate_key 上
                     if st.checkbox("选择此图", key=f"chk_{item['candidate_key']}"): 
                         temp_selected_keys.append(item["candidate_key"])
             st.write("") 
@@ -556,7 +562,6 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
 if st.session_state.step >= 4:
     st.markdown("### 步骤 4：最终生成结果")
     
-    # 【核心筛选透传】：只提取被选中的那一组字典，保证对应的特定图象 URL 跟随下去
     selected_items = [p for p in st.session_state.matched_products if p.get("candidate_key") in st.session_state.selected_keys]
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
@@ -564,7 +569,6 @@ if st.session_state.step >= 4:
     generated_single_cards = [] 
     
     for i, item in enumerate(selected_items):
-        # 将被选中的那一帧具体的图片透传给 AI 提取器
         details_data = extract_product_details(item["url"], preselected_image=item["thumbnail"])
         if details_data:
             raw_specs = details_data.get("specs", "")
