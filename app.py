@@ -23,14 +23,23 @@ h3 { font-size: 1.2rem !important; }
 [data-testid="stPageLink-NavLink"]:hover { background-color: #F1F3F4; border-color: #DADCE0; }
 [data-testid="stPageLink-NavLink"] p { color: #1A73E8 !important; }
 
-/* 修复按钮字体颜色问题 */
-.stButton > button { border-radius: 4px !important; border: none !important; font-weight: 500 !important; padding: 8px 24px !important; transition: all 0.2s ease !important; }
-.stButton > button[kind="primary"] { background-color: #1A73E8 !important; color: #FFFFFF !important; box-shadow: none !important; }
-.stButton > button[kind="primary"] * { color: #FFFFFF !important; fill: #FFFFFF !important; }
-.stButton > button[kind="primary"] p, .stButton > button[kind="primary"] span { color: #FFFFFF !important; }
-.stButton > button[kind="primary"]:hover { background-color: #174EA6 !important; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important; }
+/* 强力修复所有按钮的字体颜色问题，包括表单提交按钮 */
+button[kind="primary"], button[kind="primaryFormSubmit"], div[data-testid="stForm"] button { 
+    background-color: #1A73E8 !important; 
+    color: #FFFFFF !important; 
+    box-shadow: none !important; 
+    border: none !important; 
+}
+button[kind="primary"] *, button[kind="primaryFormSubmit"] *, div[data-testid="stForm"] button * { 
+    color: #FFFFFF !important; 
+    fill: #FFFFFF !important; 
+}
+button[kind="primary"]:hover, div[data-testid="stForm"] button:hover { 
+    background-color: #174EA6 !important; 
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
+}
 
-.stButton > button[kind="secondary"] { background: #FFFFFF !important; border: 1px solid #DADCE0 !important; }
+.stButton > button[kind="secondary"] { background: #FFFFFF !important; border: 1px solid #DADCE0 !important; color: #1A73E8 !important; }
 .stButton > button[kind="secondary"] * { color: #1A73E8 !important; }
 .stButton > button[kind="secondary"]:hover { background: #F1F3F4 !important; }
 
@@ -91,7 +100,7 @@ templates = {
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 8px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷️ {price}</span>
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷️️ {price}</span>
             </div>
             <div style="background-color: #FFF5E4; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-size: 11px; color: #555555; line-height: 1.4;">
                 {specs}
@@ -243,7 +252,6 @@ def fetch_product_list(category_url):
             if img:
                 src = img.get('data-src') or img.get('src')
                 if src:
-                    # AI 海选模式的基础过滤
                     src_lower = str(src).lower()
                     if not any(x in src_lower for x in ['logo', 'icon', 'svg', 'gif']):
                         img_url = urljoin(category_url, src).split('?')[0]
@@ -252,7 +260,7 @@ def fetch_product_list(category_url):
                         if len(products) >= 60: break
     return products
 
-# 【核心更新】漏斗式防误抓取图集算法
+# 【核心更新】漏斗式防误抓取图集算法，精准排除底部的 "猜你喜欢" 和 "浏览历史" 干扰图片
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     candidates = []
@@ -272,21 +280,39 @@ def fetch_direct_urls(url_list_text):
                 valid_imgs.append(urljoin(clean_url, og_img['content']).split('?')[0])
             
             # 2. 第二优先级：遍历并严格过滤相册图
+            # 定义黑名单：涵盖所有可能的无关元素、页脚、侧边栏、推荐位、历史记录
+            bad_keywords = ['logo', 'icon', 'svg', 'gif', 'badge', 'avatar', 'footer', 'header', 'menu', 
+                            'video', 'play', 'mp4', 'youtube', 'vimeo', 'trust', 'payment', 
+                            'related', 'recommend', 'upsell', 'cross', 'recent', 'history', 
+                            'review', 'testimonial', 'popup', 'modal', 'cart', 'bottom', 'sidebar', 'nav']
+                            
             for img in soup.find_all('img'):
                 src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
                 if not src: continue
                 
-                src_lower = str(src).lower()
-                img_class = " ".join(img.get('class', [])).lower()
-                parent_class = " ".join(img.parent.get('class', [])).lower() if img.parent else ""
-                
-                # 黑名单：彻底屏蔽 Logo、视频按钮、占位符、页脚图标等
-                is_bad = any(x in src_lower or x in img_class or x in parent_class for x in [
-                    'logo', 'icon', 'svg', 'gif', 'badge', 'avatar', 'footer', 'header', 'menu', 
-                    'video', 'play', 'mp4', 'youtube', 'vimeo', 'trust', 'payment'
-                ])
+                # 【深度排雷】：向上检查 5 层父元素，如果图片放在"猜你喜欢"等区域，直接抛弃！
+                parent = img.parent
+                is_bad = False
+                depth = 0
+                while parent and depth < 5:
+                    p_class = " ".join(parent.get('class', [])).lower()
+                    p_id = (parent.get('id') or '').lower()
+                    if any(x in p_class or x in p_id for x in bad_keywords):
+                        is_bad = True
+                        break
+                    parent = parent.parent
+                    depth += 1
+                    
                 if is_bad: continue
                 
+                src_lower = str(src).lower()
+                img_class = " ".join(img.get('class', [])).lower()
+                img_alt = (img.get('alt') or '').lower()
+                
+                # 检查图片自身的属性是否包含黑名单词汇
+                if any(x in src_lower or x in img_class or x in img_alt for x in bad_keywords):
+                    continue
+                    
                 # 白名单：只允许主流照片格式
                 if not any(ext in src_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
                     continue
@@ -302,7 +328,7 @@ def fetch_direct_urls(url_list_text):
             if not valid_imgs:
                 valid_imgs.append(dummy_image)
                 
-            # 严格截断：无论网页多长，每个商品只取通过筛选的前 4 张图片（排除底部推荐商品）
+            # 严格截断：无论网页多长，每个商品只取通过最严格筛选的前 4 张纯正商品图
             for idx, img_url in enumerate(valid_imgs[:4]):
                 candidates.append({
                     "title": title,
