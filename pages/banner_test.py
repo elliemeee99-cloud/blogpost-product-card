@@ -210,7 +210,6 @@ def generate_banner_gemini(prompt: str, ref_images_bytes: list, api_key: str, mo
     if "flash-image" in model_choice:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_choice}:generateContent?key={api_key}"
         parts = []
-        # 将选中的商品原图作为参考图喂给 Gemini
         for img_b in ref_images_bytes:
             parts.append({
                 "inlineData": {
@@ -278,7 +277,7 @@ def generate_banner_openai(prompt: str, ref_images_bytes: list, api_key: str, ba
             if item.get("b64_json"): return base64.b64decode(item["b64_json"])
             if item.get("url"): return requests.get(item["url"], timeout=30).content
 
-    # 2. 标准生成接口（带自动模型回退：如果指定的模型不存在，自动尝试备选模型）
+    # 2. 标准生成接口（带自动模型回退）
     gen_url = f"{base_url}/images/generations"
     models_to_try = [model_name] + [m for m in ["gpt-image-1", "dall-e-3", "dall-e-2"] if m != model_name]
     last_error = ""
@@ -286,9 +285,9 @@ def generate_banner_openai(prompt: str, ref_images_bytes: list, api_key: str, ba
     for m in models_to_try:
         payload = {"model": m, "prompt": prompt, "n": 1}
         if m == "dall-e-3":
-            payload["size"] = "1792x1024"  # DALL-E 3 原生横版尺寸
+            payload["size"] = "1792x1024"
         elif m == "gpt-image-1":
-            payload["size"] = "1536x1024"  # GPT-Image-1 原生横版尺寸
+            payload["size"] = "1536x1024"
         else:
             payload["size"] = "1024x1024"
 
@@ -301,7 +300,6 @@ def generate_banner_openai(prompt: str, ref_images_bytes: list, api_key: str, ba
                 return requests.get(item["url"], timeout=30).content
         else:
             last_error = f"[{m}] HTTP {res.status_code}: {res.text}"
-            # 如果是模型不存在的 400 错误，继续循环尝试下一个模型
             if "does not exist" in res.text or "invalid_value" in res.text or "model_not_found" in res.text:
                 continue
             else:
@@ -422,7 +420,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_selected_keys:
     st.markdown("---")
     st.markdown("### 步骤 3：一键生成 Banner 与推送到 WordPress")
     
-    # 获取当前勾选的商品详情与原图 URL
     selected_items = [p for p in st.session_state.b_pool if p.get("candidate_key", p["url"]) in st.session_state.b_selected_keys]
     selected_img_urls = [item["thumbnail"] for item in selected_items]
     selected_titles = list(dict.fromkeys([item.get("title", "")[:40] for item in selected_items if item.get("title")]))
@@ -446,7 +443,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_selected_keys:
                         st.success("✅ 拼接 Banner 生成成功！")
                     else: st.error("拼图失败，请检查原图链接是否可访问。")
         else:
-            # 根据勾选的商品自动组装默认提示词
             default_prompt = (
                 f"A warm, aesthetic lifestyle blog banner photography featuring these personalized gift products ({'; '.join(selected_titles)}). "
                 f"Cozy Nordic home setting, soft natural lighting, high resolution, photorealistic, no text overlay."
@@ -510,24 +506,19 @@ if st.session_state.b_step >= 3 and st.session_state.b_selected_keys:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
-        if "WP_USERS" in st.secrets:
-            user_options = st.secrets["WP_USERS"]
-            selected_user_display = st.selectbox("👤 选择发布账号：", list(user_options.keys()))
-            wp_user = user_options[selected_user_display]
-        else:
-            wp_user = st.text_input("👤 WordPress 账号 (兼容模式)", value=st.secrets.get("WP_USER", ""))
-            
-        pass_dict_key = f"WP_PASS_{site_prefix}"
+        # 静默加载默认账号与对应站点密码，不再展示账号输入框
+        user_key = "WP_USER"
+        pass_key = f"WP_PASS_{site_prefix}"
         
-        if pass_dict_key in st.secrets and hasattr(st.secrets[pass_dict_key], "items") and wp_user in st.secrets[pass_dict_key]:
-            wp_pass = st.secrets[pass_dict_key][wp_user]
-            st.success("🔒 凭证已加载")
-        elif pass_dict_key in st.secrets and isinstance(st.secrets[pass_dict_key], str):
-            wp_pass = st.secrets[pass_dict_key]
-            st.success("🔒 凭证已加载 (旧版模式)")
+        if user_key in st.secrets and pass_key in st.secrets:
+            st.success("🔒 凭证已自动加载")
+            wp_user = st.secrets[user_key]
+            wp_pass = st.secrets[pass_key]
         else:
-            st.warning("⚠️ 未在 Secrets 中找到对应密码，请手动输入。")
-            wp_pass = st.text_input("🔑 应用密码", type="password")
+            st.warning(f"⚠️ 缺少 {pass_key}，请前往后台 Secrets 添加。")
+            c1, c2 = st.columns(2)
+            with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
+            with c2: wp_pass = st.text_input("应用密码", type="password")
             
         post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
         target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID。")
