@@ -125,7 +125,7 @@ def fetch_direct_urls(url_list_text):
         clean_url = url.split('?')[0]
         soup = get_soup(clean_url)
         if soup:
-            title = (soup.title.string if soup.title else "未命名商品").replace('\n', ' ').strip()
+            title = (soup.title.string if soup.title else "").replace('\n', ' ').strip()
             valid_imgs = []
             og_img = soup.find('meta', property='og:image')
             if og_img and og_img.get('content'):
@@ -308,17 +308,26 @@ def generate_banner_openai(prompt: str, ref_images_bytes: list, api_key: str, ba
     raise Exception(f"OpenAI 生图请求失败: {last_error}")
 
 
-# ================= WordPress 推送函数 =================
+# ================= WordPress 推送函数 (无中文污染纯净版) =================
 def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id=""):
     base_api = wp_url.rstrip('/') + '/wp-json/wp/v2'
     auth, media_id, media_url = (username, password), None, ""
     
     if banner_bytes:
         try:
-            res_media = requests.post(f"{base_api}/media", headers={'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'}, data=banner_bytes, auth=auth, timeout=30)
-            if res_media.status_code in [200, 201]: media_id, media_url = res_media.json().get('id'), res_media.json().get('source_url')
-            else: return False, f"图片上传失败: {res_media.text}"
-        except Exception as e: return False, f"图片上传异常: {e}"
+            res_media = requests.post(
+                f"{base_api}/media",
+                headers={'Content-Type': 'image/jpeg', 'Content-Disposition': 'attachment; filename="callie-banner.jpg"'},
+                data=banner_bytes,
+                auth=auth,
+                timeout=30
+            )
+            if res_media.status_code in [200, 201]:
+                media_id, media_url = res_media.json().get('id'), res_media.json().get('source_url')
+            else:
+                return False, f"图片上传失败: {res_media.text}"
+        except Exception as e:
+            return False, f"图片上传异常: {e}"
 
     try:
         if post_id.strip():
@@ -328,30 +337,39 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
                 post_endpoint = f"{base_api}/pages/{post_id.strip()}"
                 res_get = requests.get(f"{post_endpoint}?context=edit", auth=auth, timeout=15, allow_redirects=True)
                 
-            if res_get.status_code != 200: return False, "无法读取原文章。"
+            if res_get.status_code != 200:
+                return False, "无法读取原文章。"
             
             real_endpoint = res_get.url.split('?')[0]
             current_content = res_get.json().get('content', {}).get('raw', '')
             
-            if media_url: current_content = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' + current_content
+            if media_url:
+                current_content = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' + current_content
+            
+            # 【核心修复】：更新已有文章时，绝不覆盖原文章的 title！仅更新正文与特色图片
             update_data = {'content': current_content}
-            if title: update_data['title'] = title
-            if media_id: update_data['featured_media'] = media_id
+            if media_id:
+                update_data['featured_media'] = media_id
             
             res_post = requests.post(real_endpoint, json=update_data, auth=auth, timeout=30, allow_redirects=False)
             if res_post.status_code in [301, 302, 307, 308]:
                 res_post = requests.post(res_post.headers.get('Location'), json=update_data, auth=auth, timeout=30, allow_redirects=False)
-            action_text = "更新特定文章"
+            action_text = "更新特定文章 (保留原标题)"
         else:
             banner_html = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' if media_url else ""
-            post_data = {'title': title, 'content': banner_html, 'status': 'draft'}
-            if media_id: post_data['featured_media'] = media_id 
+            safe_title = title.strip() if title and title.strip() else "New Blog Post Draft"
+            post_data = {'title': safe_title, 'content': banner_html, 'status': 'draft'}
+            if media_id:
+                post_data['featured_media'] = media_id 
             res_post = requests.post(f"{base_api}/posts", json=post_data, auth=auth, timeout=30)
             action_text = "新建草稿"
             
-        if res_post.status_code in [200, 201]: return True, f"{action_text}成功并写入！"
-        else: return False, f"{action_text}失败: {res_post.text}"
-    except Exception as e: return False, f"发布异常: {e}"
+        if res_post.status_code in [200, 201]:
+            return True, f"{action_text}成功并写入！"
+        else:
+            return False, f"{action_text}失败: {res_post.text}"
+    except Exception as e:
+        return False, f"发布异常: {e}"
 
 # ================= UI 布局 =================
 
@@ -506,7 +524,6 @@ if st.session_state.b_step >= 3 and st.session_state.b_selected_keys:
         site_prefix = my_wp_sites[selected_site_name]
         wp_url = site_urls[site_prefix]
         
-        # 静默加载默认账号与对应站点密码，不再展示账号输入框
         user_key = "WP_USER"
         pass_key = f"WP_PASS_{site_prefix}"
         
@@ -520,8 +537,8 @@ if st.session_state.b_step >= 3 and st.session_state.b_selected_keys:
             with c1: wp_user = st.text_input("用户名", value=st.secrets.get("WP_USER", ""))
             with c2: wp_pass = st.text_input("应用密码", type="password")
             
-        post_title = st.text_input("📝 博客标题 (新建草稿时使用)", value="🔥 自动 Banner 推送测试")
-        target_post_id = st.text_input("🎯 指定文章 ID (可选)", help="留空则每次新建草稿。如果想更新已有的文章，请填入该文章的 ID。")
+        target_post_id = st.text_input("🎯 指定文章 ID (推荐填写)", help="填入你要更新的已有文章 ID，系统将只插入 Banner 图而不会改动原标题；留空则会新建草稿。")
+        post_title = st.text_input("📝 新建草稿标题 (仅在未填文章 ID 时生效)", value="", placeholder="若上方填写了文章 ID，此处无需填写")
         
         if st.button("🚀 2. 推送并强制校验", type="primary"):
             if not st.session_state.b_banner_bytes: st.warning("请先在左侧点击生成 Banner！")
