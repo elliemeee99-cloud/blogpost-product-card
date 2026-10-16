@@ -84,7 +84,7 @@ if "generated_cards_list" not in st.session_state: st.session_state.generated_ca
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
-# ================= HTML 响应式模板库 =================
+# ================= HTML 响应式模板库 (Dofollow 权重内链版) =================
 templates = {
     "模板 1：左右结构 (规格列表版)": {
         "type": "single",
@@ -92,7 +92,7 @@ templates = {
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 180px;">
     <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+        <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
     </div>
@@ -106,7 +106,7 @@ templates = {
                 {specs}
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 12px; margin-top: auto; white-space: nowrap;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 12px; margin-top: auto; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -117,7 +117,7 @@ templates = {
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 160px;">
     <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+        <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
     </div>
@@ -128,7 +128,7 @@ templates = {
                 <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷️ {price}</span>
             </div>
         </div>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 12px; margin-top: auto; white-space: nowrap;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 12px; margin-top: auto; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -139,7 +139,7 @@ templates = {
 {json_ld}
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
     <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="display: block; width: 100%; height: 100%;">
+        <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; outline: none;">
         </a>
     </div>
@@ -147,7 +147,7 @@ templates = {
     <div style="color: #A1887F; font-size: 11px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 46px; overflow: hidden;">{specs}</div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #F59E0B; font-size: 18px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
     </div>
 </div>
 """
@@ -163,12 +163,12 @@ templates = {
         "item_html": """
 <div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-right: 16px; box-sizing: border-box;">
     <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
+        <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
     <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -208,12 +208,12 @@ templates = {
         "item_html": """
 <div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-left: 10px; margin-right: 6px; box-sizing: border-box; scroll-snap-align: start;">
     <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
+        <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
     <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" rel="nofollow sponsored" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
@@ -740,7 +740,6 @@ if st.session_state.step >= 4:
                 specs_plain = "; ".join(lines)
                 
             details_data["specs_formatted"] = specs_str
-            # 优先使用网页原生 meta description，若无则使用规格文本与标题组装描述
             schema_desc = details_data.get("page_description") or specs_plain or details_data.get("title", "")
             details_data["schema_description"] = schema_desc
             all_extracted_data.append(details_data)
@@ -756,7 +755,7 @@ if st.session_state.step >= 4:
             )
             
             if st.session_state.output_mode == "image":
-                raw_img_html = f"""{ld_script}<div style="text-align: center; margin-bottom: 25px;"><a href="{details_data.get("buy_link")}" target="_blank" rel="nofollow sponsored" title="{details_data.get("title", "Callie Product")}"><img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05);"></a></div>"""
+                raw_img_html = f"""{ld_script}<div style="text-align: center; margin-bottom: 25px;"><a href="{details_data.get("buy_link")}" target="_blank" title="{details_data.get("title", "Callie Product")}"><img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05);"></a></div>"""
                 generated_single_cards.append(raw_img_html)
                 st.markdown(f"**📝 原图预览: {details_data.get('title', item['title'])}**")
                 c1, c2 = st.columns([1, 1], gap="large")
