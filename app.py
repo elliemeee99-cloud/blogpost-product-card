@@ -100,7 +100,7 @@ templates = {
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
             <div style="margin-bottom: 8px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷️️ {price}</span>
+                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷 {price}</span>
             </div>
             <div style="background-color: #FFF5E4; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-size: 11px; color: #555555; line-height: 1.4;">
                 {specs}
@@ -260,7 +260,6 @@ def fetch_product_list(category_url):
                         if len(products) >= 60: break
     return products
 
-# 【核心更新】漏斗式防误抓取图集算法，精准排除底部的 "猜你喜欢" 和 "浏览历史" 干扰图片
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
     candidates = []
@@ -274,13 +273,10 @@ def fetch_direct_urls(url_list_text):
             
             valid_imgs = []
             
-            # 1. 第一优先级：提取精准的 OpenGraph 主图
             og_img = soup.find('meta', property='og:image')
             if og_img and og_img.get('content'):
                 valid_imgs.append(urljoin(clean_url, og_img['content']).split('?')[0])
             
-            # 2. 第二优先级：遍历并严格过滤相册图
-            # 定义黑名单：涵盖所有可能的无关元素、页脚、侧边栏、推荐位、历史记录
             bad_keywords = ['logo', 'icon', 'svg', 'gif', 'badge', 'avatar', 'footer', 'header', 'menu', 
                             'video', 'play', 'mp4', 'youtube', 'vimeo', 'trust', 'payment', 
                             'related', 'recommend', 'upsell', 'cross', 'recent', 'history', 
@@ -290,7 +286,6 @@ def fetch_direct_urls(url_list_text):
                 src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
                 if not src: continue
                 
-                # 【深度排雷】：向上检查 5 层父元素，如果图片放在"猜你喜欢"等区域，直接抛弃！
                 parent = img.parent
                 is_bad = False
                 depth = 0
@@ -309,26 +304,21 @@ def fetch_direct_urls(url_list_text):
                 img_class = " ".join(img.get('class', [])).lower()
                 img_alt = (img.get('alt') or '').lower()
                 
-                # 检查图片自身的属性是否包含黑名单词汇
                 if any(x in src_lower or x in img_class or x in img_alt for x in bad_keywords):
                     continue
                     
-                # 白名单：只允许主流照片格式
                 if not any(ext in src_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
                     continue
                     
                 full_url = urljoin(clean_url, src).split('?')[0]
                 
-                # 权重提权：电商网站的商品原图通常储存在包含 uploads 或 product 的目录下
                 if 'uploads' in full_url.lower() or 'product' in full_url.lower():
                     if full_url not in valid_imgs:
                         valid_imgs.append(full_url)
             
-            # 兜底：如果过滤得太干净一张图都没了，放一张占位图
             if not valid_imgs:
                 valid_imgs.append(dummy_image)
                 
-            # 严格截断：无论网页多长，每个商品只取通过最严格筛选的前 4 张纯正商品图
             for idx, img_url in enumerate(valid_imgs[:4]):
                 candidates.append({
                     "title": title,
@@ -370,6 +360,14 @@ def extract_product_details(product_url, preselected_image=None):
     
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
+    
+    # 提取网页原生的货币与描述 Meta 标签，辅助结构化数据
+    og_currency_tag = soup.find('meta', property='product:price:currency') or soup.find('meta', property='og:price:currency')
+    page_currency = og_currency_tag.get('content', '').strip().upper() if og_currency_tag and og_currency_tag.get('content') else ""
+    
+    og_desc_tag = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
+    page_desc = og_desc_tag.get('content', '').strip() if og_desc_tag and og_desc_tag.get('content') else ""
+
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
@@ -386,10 +384,12 @@ def extract_product_details(product_url, preselected_image=None):
         result = json.loads(clean_json_response(response.choices[0].message.content))
         result["image_url"] = main_image
         result["buy_link"] = product_url
+        result["page_currency"] = page_currency
+        result["page_description"] = page_desc
         return result
     except: return None
 
-# ================= 结构化数据 =================
+# ================= 结构化数据 (全字段合规升级版) =================
 def format_price_for_schema(price_str):
     if not price_str: return "0.00"
     p = str(price_str).replace(',', '.') 
@@ -398,26 +398,155 @@ def format_price_for_schema(price_str):
     if len(parts) > 2: p = "".join(parts[:-1]) + "." + parts[-1]
     return p if p else "0.00"
 
-def generate_single_json_ld(title, image_url, price, buy_link, return_days):
-    price_num = format_price_for_schema(price)
+def detect_currency_and_country(buy_link, price_str="", page_currency=""):
+    """根据域名、价格符号和网页 Meta 自动匹配准确的 ISO 货币代码与国家代码"""
     url_lower = str(buy_link).lower()
-    currency = 'EUR' if 'fr.' in url_lower or 'de.' in url_lower or 'es.' in url_lower or 'it.' in url_lower else 'USD'
-    ld = {
-        "@context": "https://schema.org/", "@type": "Product", "name": title[:140], "image": image_url, "brand": {"@type": "Brand", "name": "Callie"},
-        "offers": {"@type": "Offer", "price": price_num, "priceCurrency": currency, "url": buy_link, "availability": "https://schema.org/InStock"}
-    }
+    p_str = str(price_str).lower()
+    
+    # 9 大欧洲站点及英美站点映射表
+    domain_map = [
+        (['callie.de', 'de.callie'], 'EUR', 'DE'),
+        (['fr.callie', 'callie.fr'], 'EUR', 'FR'),
+        (['callie.es', 'es.callie'], 'EUR', 'ES'),
+        (['it.callie', 'callie.it'], 'EUR', 'IT'),
+        (['nl.callie', 'callie.nl'], 'EUR', 'NL'),
+        (['callie.fi', 'fi.callie'], 'EUR', 'FI'),
+        (['callie.se', 'se.callie'], 'SEK', 'SE'),
+        (['no.callie', 'callie.no'], 'NOK', 'NO'),
+        (['pl.callie', 'callie.pl'], 'PLN', 'PL'),
+        (['uk.callie', 'callie.co.uk'], 'GBP', 'GB'),
+    ]
+    
+    detected_curr, detected_country = 'USD', 'US'
+    for patterns, curr, country in domain_map:
+        if any(pat in url_lower for pat in patterns):
+            detected_curr, detected_country = curr, country
+            break
+    else:
+        # 域名未命中时根据价格符号兜底
+        if '€' in p_str or 'eur' in p_str:
+            detected_curr, detected_country = 'EUR', 'FR'
+        elif 'zł' in p_str or 'pln' in p_str:
+            detected_curr, detected_country = 'PLN', 'PL'
+        elif '£' in p_str or 'gbp' in p_str:
+            detected_curr, detected_country = 'GBP', 'GB'
+        elif 'kr' in p_str:
+            detected_curr, detected_country = 'SEK', 'SE'
+
+    if page_currency and len(page_currency) == 3:
+        detected_curr = page_currency
+
+    return detected_curr, detected_country
+
+def build_product_schema_dict(title, image_url, price, buy_link, return_days=30, description="", page_currency="", include_context=True):
+    """构建符合 Google Merchant Listing 规范的完整 Product 结构化数据字典"""
+    price_num = format_price_for_schema(price)
+    currency, country_code = detect_currency_and_country(buy_link, price, page_currency)
+    
+    try:
+        ret_days = int(re.sub(r'[^\d]', '', str(return_days))) if return_days else 30
+        if ret_days <= 0 or ret_days > 365: ret_days = 30
+    except:
+        ret_days = 30
+
+    clean_desc = re.sub(r'<[^>]+>', ' ', str(description or '')).strip()
+    if not clean_desc:
+        clean_desc = str(title)[:140]
+
+    schema = {}
+    if include_context:
+        schema["@context"] = "https://schema.org/"
+        
+    schema.update({
+        "@type": "Product",
+        "name": str(title)[:140],
+        "image": image_url,
+        "description": clean_desc[:300],
+        "brand": {
+            "@type": "Brand",
+            "name": "Callie"
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": price_num,
+            "priceCurrency": currency,
+            "url": buy_link,
+            "availability": "https://schema.org/InStock",
+            "hasMerchantReturnPolicy": {
+                "@type": "MerchantReturnPolicy",
+                "applicableCountry": country_code,
+                "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+                "merchantReturnDays": ret_days,
+                "returnMethod": "https://schema.org/ReturnByMail",
+                "returnFees": "https://schema.org/FreeReturn"
+            },
+            "shippingDetails": {
+                "@type": "OfferShippingDetails",
+                "shippingRate": {
+                    "@type": "MonetaryAmount",
+                    "value": "0.00",
+                    "currency": currency
+                },
+                "shippingDestination": {
+                    "@type": "DefinedRegion",
+                    "addressCountry": country_code
+                },
+                "deliveryTime": {
+                    "@type": "ShippingDeliveryTime",
+                    "handlingTime": {
+                        "@type": "QuantitativeValue",
+                        "minValue": 1,
+                        "maxValue": 3,
+                        "unitCode": "DAY"
+                    },
+                    "transitTime": {
+                        "@type": "QuantitativeValue",
+                        "minValue": 3,
+                        "maxValue": 7,
+                        "unitCode": "DAY"
+                    }
+                }
+            }
+        }
+    })
+    return schema
+
+def generate_single_json_ld(title, image_url, price, buy_link, return_days=30, description="", page_currency=""):
+    ld = build_product_schema_dict(
+        title=title,
+        image_url=image_url,
+        price=price,
+        buy_link=buy_link,
+        return_days=return_days,
+        description=description,
+        page_currency=page_currency,
+        include_context=True
+    )
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 def generate_carousel_json_ld(products_data):
     items = []
     for i, data in enumerate(products_data):
-        price_num = format_price_for_schema(data.get("price", ""))
+        product_item = build_product_schema_dict(
+            title=data.get("title", ""),
+            image_url=data.get("image_url", ""),
+            price=data.get("price", ""),
+            buy_link=data.get("buy_link", ""),
+            return_days=data.get("return_days", 30),
+            description=data.get("schema_description", ""),
+            page_currency=data.get("page_currency", ""),
+            include_context=False
+        )
         items.append({
-            "@type": "ListItem", "position": i + 1,
-            "item": { "@type": "Product", "name": data.get("title", "")[:140], "image": data.get("image_url", ""), "brand": {"@type": "Brand", "name": "Callie"},
-            "offers": {"@type": "Offer", "price": price_num, "url": data.get("buy_link", "")} }
+            "@type": "ListItem",
+            "position": i + 1,
+            "item": product_item
         })
-    ld = {"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": items}
+    ld = {
+        "@context": "https://schema.org/",
+        "@type": "ItemList",
+        "itemListElement": items
+    }
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 # ================= WordPress 智能无损注入函数 =================
@@ -601,16 +730,30 @@ if st.session_state.step >= 4:
             
             if isinstance(raw_specs, dict):
                 specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
+                specs_plain = "; ".join([f"{k}: {v}" for k, v in raw_specs.items()])
             elif isinstance(raw_specs, list):
                 specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in raw_specs]) + "</ul>"
+                specs_plain = "; ".join([str(x) for x in raw_specs])
             else:
                 lines = [x.strip() for x in str(raw_specs).replace('•', '\n').split('\n') if x.strip()]
                 specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in lines]) + "</ul>"
+                specs_plain = "; ".join(lines)
                 
             details_data["specs_formatted"] = specs_str
+            # 优先使用网页原生 meta description，若无则使用规格文本与标题组装描述
+            schema_desc = details_data.get("page_description") or specs_plain or details_data.get("title", "")
+            details_data["schema_description"] = schema_desc
             all_extracted_data.append(details_data)
             
-            ld_script = generate_single_json_ld(details_data.get("title", ""), details_data.get("image_url", ""), details_data.get("price", ""), details_data.get("buy_link", ""), details_data.get("return_days", 30))
+            ld_script = generate_single_json_ld(
+                title=details_data.get("title", ""),
+                image_url=details_data.get("image_url", ""),
+                price=details_data.get("price", ""),
+                buy_link=details_data.get("buy_link", ""),
+                return_days=details_data.get("return_days", 30),
+                description=schema_desc,
+                page_currency=details_data.get("page_currency", "")
+            )
             
             if st.session_state.output_mode == "image":
                 raw_img_html = f"""{ld_script}<div style="text-align: center; margin-bottom: 25px;"><a href="{details_data.get("buy_link")}" target="_blank" rel="nofollow sponsored" title="{details_data.get("title", "Callie Product")}"><img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05);"></a></div>"""
