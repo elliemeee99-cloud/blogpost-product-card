@@ -152,6 +152,24 @@ templates = {
 </div>
 """
     },
+    "模板 6：上下结构 (纯净无规格)": {
+        "type": "single",
+        "html": """
+{json_ld}
+<div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
+    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 14px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
+        <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
+            <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; outline: none;">
+        </a>
+    </div>
+    <h3 style="margin: 0 0 14px 0; color: #3E2723; font-size: 14px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #F59E0B; font-size: 18px; font-weight: 800;">{price}</span>
+        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block; white-space: nowrap;">{cta_text}</a>
+    </div>
+</div>
+"""
+    },
     "模板 3：多商品轮播 (标准)": {
         "type": "carousel",
         "html": """
@@ -217,8 +235,51 @@ templates = {
     </div>
 </div>
 """
+    },
+    "模板 7：双图/多图拼图 (居中按钮)": {
+        "type": "collage",
+        "html": """
+{json_ld}
+<div style="background-color: #FDFBF7; border-radius: 20px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 680px; box-sizing: border-box; border: 1px solid #F3ECE3; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 24px auto;">
+    <div style="display: flex; flex-wrap: nowrap; gap: 14px; justify-content: center; align-items: stretch; margin-bottom: 18px;">
+        {collage_items}
+    </div>
+    <div style="text-align: center;">
+        <a href="{buy_link}" target="_blank" style="background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 11px 36px; border-radius: 999px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(255, 111, 89, 0.28); transition: opacity 0.2s ease;">{cta_text}</a>
+    </div>
+</div>
+""",
+        "item_html": """
+<div style="flex: 1 1 0; min-width: 0; border-radius: 14px; overflow: hidden; background-color: #FFFFFF; box-shadow: 0 4px 12px rgba(0,0,0,0.05); aspect-ratio: 1 / 1;">
+    <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
+        <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; display: block;">
+    </a>
+</div>
+"""
     }
 }
+
+# ================= 过滤尺寸 (Size) 辅助函数 =================
+SIZE_KEYWORDS = [
+    'size', 'größe', 'groesse', 'grösse', 'maße', 'masse', 'abmessung', 
+    'taille', 'dimension', 'tamaño', 'tamano', 'medida', 'taglia', 'misura', 'dimensioni',
+    'maat', 'afmeting', 'storlek', 'mått', 'størrelse', 'mål', 'koko', 'mitat', 
+    'rozmiar', 'wymiar', 'length', 'width', 'height', 'diameter', 'panjang', 'gewicht', 'weight',
+    'länge', 'laenge', 'breite', 'höhe', 'hoehe', 'kettenlänge', 'longueur', 'largeur', 'hauteur'
+]
+
+def is_size_spec_key(key_str):
+    k_lower = str(key_str).lower().strip()
+    return any(kw in k_lower for kw in SIZE_KEYWORDS)
+
+def is_size_spec_line(line_str):
+    l_lower = str(line_str).lower().strip()
+    if any(kw in l_lower for kw in SIZE_KEYWORDS):
+        return True
+    # 拦截包含明显尺寸单位（如 10x15 cm, 15 mm, 5 inch）的条目
+    if re.search(r'\b\d+(?:[.,]\d+)?\s*(?:cm|mm|inch|in|zoll)\b', l_lower):
+        return True
+    return False
 
 # ================= 核心爬虫与 AI 函数 =================
 
@@ -268,7 +329,7 @@ def fetch_direct_urls(url_list_text):
         clean_url = url.split('?')[0]
         soup = get_soup(clean_url)
         if soup:
-            title = soup.title.string if soup.title else "未命名商品"
+            title = soup.title.string if soup.title else ""
             title = title.replace('\n', ' ').strip()
             
             valid_imgs = []
@@ -361,7 +422,6 @@ def extract_product_details(product_url, preselected_image=None):
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     
-    # 提取网页原生的货币与描述 Meta 标签，辅助结构化数据
     og_currency_tag = soup.find('meta', property='product:price:currency') or soup.find('meta', property='og:price:currency')
     page_currency = og_currency_tag.get('content', '').strip().upper() if og_currency_tag and og_currency_tag.get('content') else ""
     
@@ -370,13 +430,14 @@ def extract_product_details(product_url, preselected_image=None):
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
+    # 【核心升级】：在 Prompt 中明确禁止提取任何尺寸/大小/重量信息
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
-    1. "title": Summarize the product name. Keep it VERY SHORT (Max 40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is German, output German). DO NOT translate to English.
+    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is German, output German). DO NOT translate to English.
     2. "price": The true product price exactly as written.
     3. "return_days"
-    4. "specs": Extract 3-4 key specifications as a JSON Key-Value object. Keep keys and values in the ORIGINAL LANGUAGE.
-    5. "cta_text": "Buy Now" button text in the ORIGINAL LANGUAGE.
-    RULES: NEVER extract shipping fees. {price_hint} 
+    4. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization, Occasion) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
+    5. "cta_text": Short action-oriented CTA button text (e.g., "Buy Now" / "Customize Now") in the ORIGINAL LANGUAGE.
+    RULES: NEVER extract shipping fees or size/dimensions. {price_hint} 
     Page Text: {text_content}"""
     
     try:
@@ -403,7 +464,6 @@ def detect_currency_and_country(buy_link, price_str="", page_currency=""):
     url_lower = str(buy_link).lower()
     p_str = str(price_str).lower()
     
-    # 9 大欧洲站点及英美站点映射表
     domain_map = [
         (['callie.de', 'de.callie'], 'EUR', 'DE'),
         (['fr.callie', 'callie.fr'], 'EUR', 'FR'),
@@ -423,7 +483,6 @@ def detect_currency_and_country(buy_link, price_str="", page_currency=""):
             detected_curr, detected_country = curr, country
             break
     else:
-        # 域名未命中时根据价格符号兜底
         if '€' in p_str or 'eur' in p_str:
             detected_curr, detected_country = 'EUR', 'FR'
         elif 'zł' in p_str or 'pln' in p_str:
@@ -525,28 +584,55 @@ def generate_single_json_ld(title, image_url, price, buy_link, return_days=30, d
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 def generate_carousel_json_ld(products_data):
-    items = []
-    for i, data in enumerate(products_data):
-        product_item = build_product_schema_dict(
-            title=data.get("title", ""),
-            image_url=data.get("image_url", ""),
-            price=data.get("price", ""),
-            buy_link=data.get("buy_link", ""),
-            return_days=data.get("return_days", 30),
-            description=data.get("schema_description", ""),
-            page_currency=data.get("page_currency", ""),
-            include_context=False
+    # 若多张图片属于同一个商品链接，自动合并为单个 Product Schema，避免重复定义同一商品；若为多个不同商品，则构建去重后的 ItemList
+    unique_by_url = {}
+    for data in products_data:
+        u = data.get("buy_link", "")
+        if u not in unique_by_url:
+            unique_by_url[u] = {**data, "all_images": [data.get("image_url", "")]}
+        else:
+            img_u = data.get("image_url", "")
+            if img_u and img_u not in unique_by_url[u]["all_images"]:
+                unique_by_url[u]["all_images"].append(img_u)
+
+    unique_list = list(unique_by_url.values())
+    if len(unique_list) == 1:
+        d = unique_list[0]
+        img_field = d["all_images"] if len(d["all_images"]) > 1 else d.get("image_url", "")
+        ld = build_product_schema_dict(
+            title=d.get("title", ""),
+            image_url=img_field,
+            price=d.get("price", ""),
+            buy_link=d.get("buy_link", ""),
+            return_days=d.get("return_days", 30),
+            description=d.get("schema_description", ""),
+            page_currency=d.get("page_currency", ""),
+            include_context=True
         )
-        items.append({
-            "@type": "ListItem",
-            "position": i + 1,
-            "item": product_item
-        })
-    ld = {
-        "@context": "https://schema.org/",
-        "@type": "ItemList",
-        "itemListElement": items
-    }
+    else:
+        items = []
+        for i, data in enumerate(unique_list):
+            img_field = data["all_images"] if len(data["all_images"]) > 1 else data.get("image_url", "")
+            product_item = build_product_schema_dict(
+                title=data.get("title", ""),
+                image_url=img_field,
+                price=data.get("price", ""),
+                buy_link=data.get("buy_link", ""),
+                return_days=data.get("return_days", 30),
+                description=data.get("schema_description", ""),
+                page_currency=data.get("page_currency", ""),
+                include_context=False
+            )
+            items.append({
+                "@type": "ListItem",
+                "position": i + 1,
+                "item": product_item
+            })
+        ld = {
+            "@context": "https://schema.org/",
+            "@type": "ItemList",
+            "itemListElement": items
+        }
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 # ================= WordPress 智能无损注入函数 =================
@@ -684,29 +770,41 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
     if mode_choice.startswith("🎨"):
         st.session_state.output_mode = "card"
         
+        # 预览数据已彻底移除 Size 字段
         dummy_data = {
             "image_url": dummy_image, 
-            "title": "Custom Halloween Decoration", 
+            "title": "Custom Engraved Family Ring", 
             "price": "28.00 €", 
-            "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Material:</strong> Resin</li><li><strong>Size:</strong> 10x15 cm</li></ul>", 
+            "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Material:</strong> Sterling Silver</li><li><strong>Craft:</strong> Custom Engraved</li></ul>", 
             "buy_link": "https://fr.callie.com", 
             "cta_text": "Add To Cart", 
             "json_ld": ""
         }
         
-        tmpl_cols = st.columns(len(templates))
-        for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, templates.items()):
-            with col:
-                st.markdown(f"**{tmpl_name}**")
-                preview_html = tmpl_data["html"].replace("{carousel_items}", tmpl_data.get("item_html","").format(**dummy_data) * 3).format(**dummy_data) if tmpl_data["type"] == "carousel" else tmpl_data["html"].format(**dummy_data)
-                
-                wrapped_html = f"<html><body style='margin:0; padding:10px; background:#fff; font-family:sans-serif;'>{preview_html}</body></html>"
-                st.components.v1.html(wrapped_html, height=380, scrolling=True)
-                
-                if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
-                    st.session_state.selected_template = tmpl_name
-                    st.session_state.step = 4
-                    st.rerun()
+        # 每行展示最多 4 个模板预览框，保持宽敞美观
+        tmpl_items = list(templates.items())
+        cols_per_tmpl_row = 4
+        for r_idx in range(0, len(tmpl_items), cols_per_tmpl_row):
+            row_tmpls = tmpl_items[r_idx:r_idx + cols_per_tmpl_row]
+            tmpl_cols = st.columns(cols_per_tmpl_row)
+            for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, row_tmpls):
+                with col:
+                    st.markdown(f"**{tmpl_name}**")
+                    if tmpl_data["type"] == "carousel":
+                        preview_html = tmpl_data["html"].replace("{carousel_items}", tmpl_data.get("item_html", "").format(**dummy_data) * 3).format(**dummy_data)
+                    elif tmpl_data["type"] == "collage":
+                        preview_html = tmpl_data["html"].replace("{collage_items}", tmpl_data.get("item_html", "").format(**dummy_data) * 2).format(**dummy_data)
+                    else:
+                        preview_html = tmpl_data["html"].format(**dummy_data)
+                    
+                    wrapped_html = f"<html><body style='margin:0; padding:10px; background:#fff; font-family:sans-serif;'>{preview_html}</body></html>"
+                    st.components.v1.html(wrapped_html, height=380, scrolling=True)
+                    
+                    if st.button(f"✨ 使用【{tmpl_name.split('：')[0]}】生成", key=f"btn_{tmpl_name}", use_container_width=True):
+                        st.session_state.selected_template = tmpl_name
+                        st.session_state.step = 4
+                        st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.session_state.output_mode = "image"
         st.markdown("<br>", unsafe_allow_html=True)
@@ -717,25 +815,39 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
 if st.session_state.step >= 4:
     st.markdown("### 步骤 4：最终生成结果")
     
-    selected_items = [p for p in st.session_state.matched_products if p.get("candidate_key") in st.session_state.selected_keys]
+    # 严格按照勾选顺序排列选中的图片项
+    key_to_item = {p.get("candidate_key"): p for p in st.session_state.matched_products}
+    selected_items = [key_to_item[k] for k in st.session_state.selected_keys if k in key_to_item]
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     all_extracted_data = []
     generated_single_cards = [] 
+    url_details_cache = {}  # 缓存机制：若多张图片属于同一商品链接，避免重复调用 AI 提取
     
     for i, item in enumerate(selected_items):
-        details_data = extract_product_details(item["url"], preselected_image=item["thumbnail"])
+        prod_url = item["url"]
+        if prod_url in url_details_cache:
+            details_data = dict(url_details_cache[prod_url])
+            details_data["image_url"] = item["thumbnail"]
+        else:
+            details_data = extract_product_details(prod_url, preselected_image=item["thumbnail"])
+            if details_data:
+                url_details_cache[prod_url] = dict(details_data)
+
         if details_data:
             raw_specs = details_data.get("specs", "")
             
+            # 强制过滤掉所有包含 Size / 尺寸 的字段
             if isinstance(raw_specs, dict):
-                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'><strong>{k}:</strong> {v}</li>" for k, v in raw_specs.items()]) + "</ul>"
-                specs_plain = "; ".join([f"{k}: {v}" for k, v in raw_specs.items()])
+                filtered_specs = {k: v for k, v in raw_specs.items() if not is_size_spec_key(k) and not is_size_spec_line(f"{k}: {v}")}
+                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'><strong>{k}:</strong> {v}</li>" for k, v in filtered_specs.items()]) + "</ul>"
+                specs_plain = "; ".join([f"{k}: {v}" for k, v in filtered_specs.items()])
             elif isinstance(raw_specs, list):
-                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in raw_specs]) + "</ul>"
-                specs_plain = "; ".join([str(x) for x in raw_specs])
+                filtered_list = [str(x) for x in raw_specs if not is_size_spec_line(str(x))]
+                specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in filtered_list]) + "</ul>"
+                specs_plain = "; ".join(filtered_list)
             else:
-                lines = [x.strip() for x in str(raw_specs).replace('•', '\n').split('\n') if x.strip()]
+                lines = [x.strip() for x in str(raw_specs).replace('•', '\n').split('\n') if x.strip() and not is_size_spec_line(x)]
                 specs_str = "<ul style='margin:0; padding-left:16px;'>" + "".join([f"<li style='margin-bottom:3px;'>{x}</li>" for x in lines]) + "</ul>"
                 specs_plain = "; ".join(lines)
                 
@@ -796,6 +908,36 @@ if st.session_state.step >= 4:
         with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=350, scrolling=True)
         with c2: 
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"): st.code(final_carousel_html, language='html')
+
+    elif st.session_state.output_mode == "card" and templates[st.session_state.selected_template]["type"] == "collage" and all_extracted_data:
+        st.markdown("**📝 以下是包含所选商品图片的拼图模式代码组件**")
+        ld_script = generate_carousel_json_ld(all_extracted_data)
+        
+        # 【核心逻辑】：无论是同一个商品的多张图，还是不同商品的图，统一取第一个选中商品图片的链接与 CTA 文案
+        primary_buy_link = all_extracted_data[0].get("buy_link", "")
+        primary_cta_text = all_extracted_data[0].get("cta_text", "Buy Now")
+        
+        # 检查是否所有图片都来自同一个商品
+        unique_urls = set(d.get("buy_link", "") for d in all_extracted_data)
+        is_same_product = (len(unique_urls) == 1)
+        
+        collage_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(
+            image_url=data.get("image_url", ""),
+            title=data.get("title", ""),
+            buy_link=primary_buy_link if is_same_product else data.get("buy_link", primary_buy_link)
+        ) for data in all_extracted_data])
+        
+        final_collage_html = templates[st.session_state.selected_template]["html"].replace("{collage_items}", collage_items_str).format(
+            json_ld=ld_script,
+            buy_link=primary_buy_link,
+            cta_text=primary_cta_text
+        )
+        st.session_state.generated_cards_list = [final_collage_html]
+        c1, c2 = st.columns([1, 1], gap="large")
+        with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_collage_html}</body></html>", height=420, scrolling=True)
+        with c2:
+            with st.expander("💻 点击展开 / 复制完整拼图 HTML 代码"): st.code(final_collage_html, language='html')
+
     elif generated_single_cards:
         st.session_state.generated_cards_list = generated_single_cards
                 
