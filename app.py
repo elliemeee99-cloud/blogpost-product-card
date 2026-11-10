@@ -267,10 +267,55 @@ def get_badge_html(badge_id, product_url=""):
             return theme_dict[badge_id]["tpl"].format(text=localized_text)
     return ""
 
-# ================= HTML 响应式模板库 (Dofollow 权重内链 + 动态营销标签版) =================
+# ================= 真实促销价格与原价 HTML 动态组装函数 =================
+def build_price_display_html(price, original_price="", discount_text="", style_type="left_right"):
+    """
+    根据模板类型动态生成带折后价、划线原价和橙色真实折扣标 (如 10% Korting) 的 HTML
+    若商品无折扣，则仅干净地展示当前价格
+    """
+    price = str(price or "").strip()
+    orig = str(original_price or "").strip()
+    disc = str(discount_text or "").strip()
+
+    # 校验原价是否真的大于现价，防止原价与现价相同时误显示划线
+    has_valid_orig = False
+    if orig and orig != price:
+        try:
+            p_val = float(re.sub(r'[^\d.]', '', price.replace(',', '.')) or 0)
+            o_val = float(re.sub(r'[^\d.]', '', orig.replace(',', '.')) or 0)
+            if o_val > p_val > 0:
+                has_valid_orig = True
+        except:
+            has_valid_orig = True
+
+    if style_type == "left_right":
+        # 适用于模板 1、模板 4（左右结构）
+        html = f'<span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block; vertical-align: middle;">🏷️ {price}</span>'
+        if has_valid_orig:
+            html += f'<del style="color: #9CA3AF; font-size: 12px; margin-left: 6px; font-weight: 500; vertical-align: middle;">{orig}</del>'
+        if disc:
+            html += f'<span style="background-color: #FF8A3D; color: #FFFFFF; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 11px; margin-left: 6px; display: inline-block; vertical-align: middle;">{disc}</span>'
+        return html
+
+    elif style_type == "top_bottom":
+        # 适用于模板 2、模板 6（上下圆润多巴胺结构）
+        orig_html = f'<del style="color: #9CA3AF; font-size: 12px; font-weight: 500; margin-left: 4px;">{orig}</del>' if has_valid_orig else ""
+        disc_html = f'<div style="margin-top: 3px;"><span style="background-color: #FF8A3D; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block;">{disc}</span></div>' if disc else ""
+        return f'<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;"><div><span style="color: #F59E0B; font-size: 18px; font-weight: 800;">{price}</span>{orig_html}</div>{disc_html}</div>'
+
+    elif style_type == "carousel":
+        # 适用于模板 3、模板 5（多商品轮播结构）
+        orig_html = f'<del style="color: #9CA3AF; font-size: 11px; font-weight: normal; margin-left: 3px;">{orig}</del>' if has_valid_orig else ""
+        disc_html = f'<div style="margin-top: 2px;"><span style="background-color: #FF8A3D; color: #FFFFFF; padding: 1px 5px; border-radius: 3px; font-size: 9.5px; font-weight: bold; display: inline-block;">{disc}</span></div>' if disc else ""
+        return f'<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15;"><div><span style="color: #111111; font-size: 14px; font-weight: 800;">{price}</span>{orig_html}</div>{disc_html}</div>'
+
+    return price
+
+# ================= HTML 响应式模板库 (支持真实折扣价+原价+促销标) =================
 templates = {
     "模板 1：左右结构 (规格列表版)": {
         "type": "single",
+        "price_style": "left_right",
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 180px;">
@@ -283,8 +328,8 @@ templates = {
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-            <div style="margin-bottom: 8px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷 {price}</span>
+            <div style="margin-bottom: 8px; line-height: 1.4;">
+                {price_html}
             </div>
             <div style="background-color: #FFF5E4; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-size: 11px; color: #555555; line-height: 1.4;">
                 {specs}
@@ -297,6 +342,7 @@ templates = {
     },
     "模板 4：左右结构 (纯净无规格)": {
         "type": "single",
+        "price_style": "left_right",
         "html": """
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 160px;">
@@ -309,8 +355,8 @@ templates = {
     <div style="flex: 1 1 55%; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; overflow: hidden;">
         <div style="overflow: hidden;">
             <h3 style="margin-top: 0; color: #333333; font-size: 13px; margin-bottom: 8px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-            <div style="margin-bottom: 12px;">
-                <span style="background-color: #FF6F59; color: #FFFFFF; padding: 3px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block;">🏷️ {price}</span>
+            <div style="margin-bottom: 12px; line-height: 1.4;">
+                {price_html}
             </div>
         </div>
         <a href="{buy_link}" target="_blank" style="display: block; text-align: center; background-color: #FF6F59; color: #FFFFFF; text-decoration: none; padding: 8px; border-radius: 8px; font-weight: bold; font-size: 12px; margin-top: auto; white-space: nowrap;">{cta_text}</a>
@@ -320,6 +366,7 @@ templates = {
     },
     "模板 2：上下结构 (圆润多巴胺)": {
         "type": "single",
+        "price_style": "top_bottom",
         "html": """
 {json_ld}
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
@@ -330,16 +377,17 @@ templates = {
         </a>
     </div>
     <h3 style="margin: 0 0 10px 0; color: #3E2723; font-size: 14px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-    <div style="color: #A1887F; font-size: 11px; margin-bottom: 20px; font-weight: 500; line-height: 1.4; height: 46px; overflow: hidden;">{specs}</div>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #F59E0B; font-size: 18px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block;">{cta_text}</a>
+    <div style="color: #A1887F; font-size: 11px; margin-bottom: 16px; font-weight: 500; line-height: 1.4; height: 46px; overflow: hidden;">{specs}</div>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        {price_html}
+        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 18px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
     },
     "模板 6：上下结构 (纯净无规格)": {
         "type": "single",
+        "price_style": "top_bottom",
         "html": """
 {json_ld}
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
@@ -350,15 +398,16 @@ templates = {
         </a>
     </div>
     <h3 style="margin: 0 0 14px 0; color: #3E2723; font-size: 14px; font-weight: 800; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #F59E0B; font-size: 18px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block; white-space: nowrap;">{cta_text}</a>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        {price_html}
+        <a href="{buy_link}" target="_blank" style="background-color: #F59E0B; color: #ffffff; text-decoration: none; padding: 8px 18px; border-radius: 24px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
     },
     "模板 3：多商品轮播 (标准)": {
         "type": "carousel",
+        "price_style": "carousel",
         "html": """
 {json_ld}
 <div style="background-color: #FDFBF7; padding: 20px 10px; font-family: sans-serif; border-radius: 16px; margin-bottom: 20px; box-sizing: border-box; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;">
@@ -371,16 +420,17 @@ templates = {
         {badge_html}
         <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
-    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+    <h3 style="margin: 0 0 10px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+        {price_html}
+        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
     },
     "模板 5：可滑动轮播 (带交互指示器)": {
         "type": "carousel",
+        "price_style": "carousel",
         "html": """
 {json_ld}
 <div class="callie-carousel-wrapper" style="position: relative; border-radius: 16px; margin-bottom: 20px; background-color: #FDFBF7; font-family: sans-serif; overflow: hidden;">
@@ -417,16 +467,17 @@ templates = {
         {badge_html}
         <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
-    <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #111111; font-size: 15px; font-weight: 800;">{price}</span>
-        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
+    <h3 style="margin: 0 0 10px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+        {price_html}
+        <a href="{buy_link}" target="_blank" style="background-color: #D4BBAA; color: #ffffff; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap;">{cta_text}</a>
     </div>
 </div>
 """
     },
     "模板 7：双图/多图拼图 (居中按钮)": {
         "type": "collage",
+        "price_style": "left_right",
         "html": """
 {json_ld}
 <div style="background-color: #FDFBF7; border-radius: 20px; padding: 20px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 680px; box-sizing: border-box; border: 1px solid #F3ECE3; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 24px auto;">
@@ -594,6 +645,41 @@ def ai_match_top_30(blog_text, product_list):
         return json.loads(clean_json_response(response.choices[0].message.content))
     except: return product_list[:30]
 
+def extract_promo_hints(soup, text_content):
+    """从 DOM 节点与文本中探测真实划线原价与折扣标签 (如 10% Korting / -15% / € 26,00)"""
+    strike_candidates = []
+    for tag in soup.find_all(['del', 's', 'strike']):
+        t = tag.get_text(strip=True)
+        if t and any(c.isdigit() for c in t) and len(t) < 25:
+            strike_candidates.append(t)
+
+    for tag in soup.find_all(['span', 'div']):
+        cls_str = " ".join(tag.get('class', [])).lower()
+        style_str = (tag.get('style') or '').lower()
+        if any(k in cls_str for k in ['old-price', 'origin-price', 'regular-price', 'compare-price', 'line-through', 'strike']) or 'line-through' in style_str:
+            t = tag.get_text(strip=True)
+            if t and any(c.isdigit() for c in t) and len(t) < 25 and t not in strike_candidates:
+                strike_candidates.append(t)
+
+    # 匹配 10% Korting, 15% Rabatt, -20%, 20% OFF, 15% Remise 等真实促销短语
+    discount_matches = re.findall(
+        r'(?:-\s*\d{1,2}\s*%|\b\d{1,2}\s*%\s*(?:korting|rabatt|remise|descuento|sconto|rabat|alennus|zniżka|znizka|off|sale|de réduction|di sconto|de descuento)?)',
+        text_content[:2500],
+        flags=re.IGNORECASE
+    )
+    clean_discounts = []
+    for d in discount_matches:
+        d_clean = d.strip()
+        if d_clean and d_clean not in clean_discounts:
+            clean_discounts.append(d_clean)
+
+    hints = []
+    if strike_candidates:
+        hints.append(f"Detected strikethrough/original price candidates in DOM: {strike_candidates[:3]}")
+    if clean_discounts:
+        hints.append(f"Detected discount badge candidates on page: {clean_discounts[:3]}")
+    return "\n".join(hints)
+
 def extract_product_details(product_url, preselected_image=None):
     soup = get_soup(product_url)
     if not soup: return None
@@ -609,7 +695,7 @@ def extract_product_details(product_url, preselected_image=None):
         main_image = urljoin(product_url, main_image).split('?')[0] if main_image else dummy_image
     
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
-    price_hint = f"\n[SYSTEM HINT]: The true product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
+    price_hint = f"\n[SYSTEM HINT]: The current selling product price is {og_price.get('content')}." if og_price and og_price.get('content') else ""
     
     og_currency_tag = soup.find('meta', property='product:price:currency') or soup.find('meta', property='og:price:currency')
     page_currency = og_currency_tag.get('content', '').strip().upper() if og_currency_tag and og_currency_tag.get('content') else ""
@@ -618,14 +704,18 @@ def extract_product_details(product_url, preselected_image=None):
     page_desc = og_desc_tag.get('content', '').strip() if og_desc_tag and og_desc_tag.get('content') else ""
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
+    promo_hint = extract_promo_hints(soup, text_content)
     
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
-    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is German, output German). DO NOT translate to English.
-    2. "price": The true product price exactly as written.
-    3. "return_days"
-    4. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization, Occasion) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
-    5. "cta_text": Short action-oriented CTA button text (e.g., "Buy Now" / "Customize Now") in the ORIGINAL LANGUAGE.
-    RULES: NEVER extract shipping fees or size/dimensions. {price_hint} 
+    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is Dutch/German, output Dutch/German). DO NOT translate to English.
+    2. "price": The current selling/discounted price with currency symbol exactly as written on the page (e.g., "€ 23,40").
+    3. "original_price": If the product is on sale and shows a crossed-out/original higher price near the current price (e.g., "€ 26,00"), extract it exactly as written. If there is no original price or it equals the current price, output "".
+    4. "discount_text": If there is a real discount badge/percentage on the product page (e.g., "10% Korting", "15% Rabatt", "-20%"), extract it in the ORIGINAL LANGUAGE. If none, output "".
+    5. "return_days"
+    6. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization, Occasion) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
+    7. "cta_text": Short action-oriented CTA button text (e.g., "Buy Now" / "Customize Now") in the ORIGINAL LANGUAGE.
+    RULES: NEVER extract shipping fees or option add-on prices (like +€ 2,70) as the product price. {price_hint}
+    {promo_hint}
     Page Text: {text_content}"""
     
     try:
@@ -953,7 +1043,6 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
 if st.session_state.step >= 3 and st.session_state.selected_keys:
     st.markdown("### 步骤 3：配置促销标签与选择模板")
 
-    # 获取第一个选中商品的 URL 与缩略图，用于在步骤 3 实时展示对应国家语言的标签预览
     key_to_item_preview = {p.get("candidate_key"): p for p in st.session_state.matched_products}
     first_selected_item = next((key_to_item_preview[k] for k in st.session_state.selected_keys if k in key_to_item_preview), None)
     sample_url_for_lang = first_selected_item["url"] if first_selected_item else "https://fr.callie.com"
@@ -961,10 +1050,11 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
     detected_preview_lang = detect_lang_from_url(sample_url_for_lang)
 
     # ---- 步骤 3.1：可选促销标签设置 ----
-    st.markdown("#### 🏷️ 3.1 是否添加大促/节日营销标签？")
+    st.markdown("#### 🏷️ 3.1 是否在商品图上叠加节日/大促角标？")
+    st.caption("💡 注：无论是否开启图片节日角标，只要商品着陆页本身存在**真实折扣价、划线原价或折扣标（如 `10% Korting`）**，系统都会自动提取并在卡片价格区域展示出来。")
     enable_badge_choice = st.radio(
-        "是否启用促销标签：",
-        ["❌ 否，不添加标签 (直接选择模板)", "✅ 是，为商品卡片添加促销标签 (Black Friday / Cyber Monday / Christmas)"],
+        "是否启用图片促销角标：",
+        ["❌ 否，不叠加图片节日角标 (仅展示页面自带真实价格与折扣)", "✅ 是，在商品图上添加节日大促角标 (Black Friday / Cyber Monday / Christmas)"],
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -982,7 +1072,6 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
             theme_materials = BADGE_CATALOG[theme_choice]
             mat_keys = list(theme_materials.keys())
 
-            # 若当前未选或切换了主题，默认选中当前主题的第 1 款素材
             if st.session_state.selected_badge_id not in mat_keys:
                 st.session_state.selected_badge_id = mat_keys[0]
 
@@ -1014,22 +1103,10 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
     st.markdown("#### 🎨 3.2 选择数据输出模式与卡片模板")
     mode_choice = st.radio("请选择：", ["🎨 生成高转化商品卡片 (包含完整排版与样式)", "🖼️ 仅生成纯净原图 (纯粹 SEO 优化，抗干扰)"], horizontal=True, label_visibility="collapsed")
     
-    # 生成当前预览使用的标签 HTML（若选择“否”则为空字符串）
     preview_badge_html = get_badge_html(st.session_state.selected_badge_id, sample_url_for_lang)
 
     if mode_choice.startswith("🎨"):
         st.session_state.output_mode = "card"
-        
-        dummy_data = {
-            "image_url": dummy_image, 
-            "title": "Custom Engraved Family Ring", 
-            "price": "28.00 €", 
-            "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Material:</strong> Sterling Silver</li><li><strong>Craft:</strong> Custom Engraved</li></ul>", 
-            "buy_link": sample_url_for_lang, 
-            "cta_text": "Add To Cart", 
-            "json_ld": "",
-            "badge_html": preview_badge_html
-        }
         
         tmpl_items = list(templates.items())
         cols_per_tmpl_row = 4
@@ -1039,6 +1116,19 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
             for col, (tmpl_name, tmpl_data) in zip(tmpl_cols, row_tmpls):
                 with col:
                     st.markdown(f"**{tmpl_name}**")
+                    p_style = tmpl_data.get("price_style", "left_right")
+                    dummy_price_html = build_price_display_html("€ 23,40", "€ 26,00", "10% Korting", style_type=p_style)
+                    dummy_data = {
+                        "image_url": dummy_image, 
+                        "title": "Gepersonaliseerde Houten Balpen Set", 
+                        "price": "€ 23,40",
+                        "price_html": dummy_price_html,
+                        "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Materiaal:</strong> Natuurlijk hout</li><li><strong>Kenmerk:</strong> Gegraveerde tekst</li></ul>", 
+                        "buy_link": sample_url_for_lang, 
+                        "cta_text": "In Winkelwagen", 
+                        "json_ld": "",
+                        "badge_html": preview_badge_html
+                    }
                     if tmpl_data["type"] == "carousel":
                         preview_html = tmpl_data["html"].replace("{carousel_items}", tmpl_data.get("item_html", "").format(**dummy_data) * 3).format(**dummy_data)
                     elif tmpl_data["type"] == "collage":
@@ -1103,7 +1193,6 @@ if st.session_state.step >= 4:
             schema_desc = details_data.get("page_description") or specs_plain or details_data.get("title", "")
             details_data["schema_description"] = schema_desc
             
-            # 根据当前商品的 URL 动态生成对应语言的标签 HTML
             item_badge_html = get_badge_html(st.session_state.selected_badge_id, details_data.get("buy_link", ""))
             details_data["badge_html"] = item_badge_html
             all_extracted_data.append(details_data)
@@ -1130,10 +1219,18 @@ if st.session_state.step >= 4:
             else:
                 tmpl_config = templates[st.session_state.selected_template]
                 if tmpl_config["type"] == "single":
+                    p_style = tmpl_config.get("price_style", "left_right")
+                    price_display_html = build_price_display_html(
+                        price=details_data.get("price", ""),
+                        original_price=details_data.get("original_price", ""),
+                        discount_text=details_data.get("discount_text", ""),
+                        style_type=p_style
+                    )
                     card_html = tmpl_config["html"].format(
                         image_url=details_data.get("image_url", ""),
                         title=details_data.get("title", ""),
                         price=details_data.get("price", ""),
+                        price_html=price_display_html,
                         specs=specs_str,
                         buy_link=details_data.get("buy_link", ""),
                         cta_text=details_data.get("cta_text", "Buy Now"),
@@ -1158,7 +1255,13 @@ if st.session_state.step >= 4:
         carousel_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(
             image_url=data.get("image_url", ""), 
             title=data.get("title", ""), 
-            price=data.get("price", ""), 
+            price=data.get("price", ""),
+            price_html=build_price_display_html(
+                price=data.get("price", ""),
+                original_price=data.get("original_price", ""),
+                discount_text=data.get("discount_text", ""),
+                style_type="carousel"
+            ),
             buy_link=data.get("buy_link", ""), 
             cta_text=unified_cta_text,
             badge_html=data.get("badge_html", "")
@@ -1167,7 +1270,7 @@ if st.session_state.step >= 4:
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
         st.session_state.generated_cards_list = [final_carousel_html]
         c1, c2 = st.columns([1, 1], gap="large")
-        with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=350, scrolling=True)
+        with c1: st.components.v1.html(f"<html><body style='margin:0; padding:10px; background:#fff;'>{final_carousel_html}</body></html>", height=360, scrolling=True)
         with c2: 
             with st.expander("💻 点击展开 / 复制完整轮播 HTML 代码"): st.code(final_carousel_html, language='html')
 
