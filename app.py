@@ -80,11 +80,194 @@ if "step" not in st.session_state: st.session_state.step = 1
 if "selected_keys" not in st.session_state: st.session_state.selected_keys = [] 
 if "output_mode" not in st.session_state: st.session_state.output_mode = "card"
 if "selected_template" not in st.session_state: st.session_state.selected_template = ""
+if "selected_badge_id" not in st.session_state: st.session_state.selected_badge_id = None
 if "generated_cards_list" not in st.session_state: st.session_state.generated_cards_list = []
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20fill%3D%22%239CA3AF%22%3E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E9%A2%84%E8%A7%88%3C%2Ftext%3E%3C%2Fsvg%3E"
 
-# ================= HTML 响应式模板库 (Dofollow 权重内链版) =================
+# ================= 多语言大促/节日标签库 (3大主题 × 5款素材 × 10国语言) =================
+
+def detect_lang_from_url(url_str):
+    """根据商品链接自动识别目标站点语言代码"""
+    u = str(url_str).lower()
+    lang_map = [
+        (['callie.de', 'de.callie'], 'DE'),
+        (['fr.callie', 'callie.fr'], 'FR'),
+        (['callie.es', 'es.callie'], 'ES'),
+        (['it.callie', 'callie.it'], 'IT'),
+        (['nl.callie', 'callie.nl'], 'NL'),
+        (['callie.se', 'se.callie'], 'SE'),
+        (['no.callie', 'callie.no'], 'NO'),
+        (['callie.fi', 'fi.callie'], 'FI'),
+        (['pl.callie', 'callie.pl'], 'PL'),
+    ]
+    for patterns, lang in lang_map:
+        if any(p in u for p in patterns):
+            return lang
+    return 'EN'
+
+BADGE_TRANSLATIONS = {
+    # --- Black Friday (5 款文案) ---
+    "bf_1": {
+        "DE": "BLACK FRIDAY", "FR": "BLACK FRIDAY", "ES": "BLACK FRIDAY", "IT": "BLACK FRIDAY",
+        "NL": "BLACK FRIDAY", "SE": "BLACK FRIDAY", "NO": "BLACK FRIDAY", "FI": "BLACK FRIDAY",
+        "PL": "BLACK FRIDAY", "EN": "BLACK FRIDAY"
+    },
+    "bf_2": {
+        "DE": "BLACK FRIDAY DEAL", "FR": "OFFRE BLACK FRIDAY", "ES": "OFERTA BLACK FRIDAY", "IT": "OFFERTA BLACK FRIDAY",
+        "NL": "BLACK FRIDAY DEAL", "SE": "BLACK FRIDAY-KLIPP", "NO": "BLACK FRIDAY-KUPP", "FI": "BLACK FRIDAY -ETU",
+        "PL": "OKAZJA BLACK FRIDAY", "EN": "BLACK FRIDAY DEAL"
+    },
+    "bf_3": {
+        "DE": "⚡ BLACK FRIDAY ANGEBOT ⚡", "FR": "⚡ SPÉCIAL BLACK FRIDAY ⚡", "ES": "⚡ ESPECIAL BLACK FRIDAY ⚡", "IT": "⚡ SPECIALE BLACK FRIDAY ⚡",
+        "NL": "⚡ BLACK FRIDAY ACTIE ⚡", "SE": "⚡ BLACK FRIDAY-ERBJUDANDE ⚡", "NO": "⚡ BLACK FRIDAY-TILBUD ⚡", "FI": "⚡ BLACK FRIDAY -TARJOUS ⚡",
+        "PL": "⚡ OFERTA BLACK FRIDAY ⚡", "EN": "⚡ BLACK FRIDAY SPECIAL ⚡"
+    },
+    "bf_4": {
+        "DE": "BLACK FRIDAY SALE", "FR": "PROMO BLACK FRIDAY", "ES": "REBAJAS BLACK FRIDAY", "IT": "SALDI BLACK FRIDAY",
+        "NL": "BLACK FRIDAY SALE", "SE": "BLACK FRIDAY REA", "NO": "BLACK FRIDAY SALG", "FI": "BLACK FRIDAY ALE",
+        "PL": "WYPRZEDAŻ BLACK FRIDAY", "EN": "BLACK FRIDAY SALE"
+    },
+    "bf_5": {
+        "DE": "BLACK FRIDAY TIPP", "FR": "SÉLECTION BLACK FRIDAY", "ES": "TOP BLACK FRIDAY", "IT": "SCELTA BLACK FRIDAY",
+        "NL": "BLACK FRIDAY TIP", "SE": "BLACK FRIDAY-VAL", "NO": "BLACK FRIDAY-VALG", "FI": "BLACK FRIDAY -VALINTA",
+        "PL": "HIT BLACK FRIDAY", "EN": "BLACK FRIDAY PICK"
+    },
+    # --- Cyber Monday (5 款文案) ---
+    "cm_1": {
+        "DE": "CYBER MONDAY", "FR": "CYBER MONDAY", "ES": "CYBER MONDAY", "IT": "CYBER MONDAY",
+        "NL": "CYBER MONDAY", "SE": "CYBER MONDAY", "NO": "CYBER MONDAY", "FI": "CYBER MONDAY",
+        "PL": "CYBER MONDAY", "EN": "CYBER MONDAY"
+    },
+    "cm_2": {
+        "DE": "CYBER MONDAY DEAL", "FR": "OFFRE CYBER MONDAY", "ES": "OFERTA CYBER MONDAY", "IT": "OFFERTA CYBER MONDAY",
+        "NL": "CYBER MONDAY DEAL", "SE": "CYBER MONDAY-KLIPP", "NO": "CYBER MONDAY-KUPP", "FI": "CYBER MONDAY -ETU",
+        "PL": "OKAZJA CYBER MONDAY", "EN": "CYBER MONDAY DEAL"
+    },
+    "cm_3": {
+        "DE": "⚡ CYBER MONDAY ANGEBOT ⚡", "FR": "⚡ EXCLUSIVITÉ CYBER MONDAY ⚡", "ES": "⚡ ESPECIAL CYBER MONDAY ⚡", "IT": "⚡ SPECIALE CYBER MONDAY ⚡",
+        "NL": "⚡ CYBER MONDAY ACTIE ⚡", "SE": "⚡ CYBER MONDAY-ERBJUDANDE ⚡", "NO": "⚡ CYBER MONDAY-TILBUD ⚡", "FI": "⚡ CYBER MONDAY -TARJOUS ⚡",
+        "PL": "⚡ OFERTA CYBER MONDAY ⚡", "EN": "⚡ CYBER MONDAY EXCLUSIVE ⚡"
+    },
+    "cm_4": {
+        "DE": "CYBER SALE", "FR": "PROMO CYBER", "ES": "CYBER OFERTA", "IT": "SALDI CYBER",
+        "NL": "CYBER SALE", "SE": "CYBER REA", "NO": "CYBER SALG", "FI": "CYBER ALE",
+        "PL": "CYBER WYPRZEDAŻ", "EN": "CYBER SALE"
+    },
+    "cm_5": {
+        "DE": "CYBER MONDAY TIPP", "FR": "SÉLECTION CYBER", "ES": "TOP CYBER MONDAY", "IT": "SCELTA CYBER",
+        "NL": "CYBER MONDAY TIP", "SE": "CYBER MONDAY-VAL", "NO": "CYBER MONDAY-VALG", "FI": "CYBER MONDAY -VALINTA",
+        "PL": "HIT CYBER MONDAY", "EN": "CYBER MONDAY PICK"
+    },
+    # --- Christmas (5 款文案) ---
+    "xm_1": {
+        "DE": "WEIHNACHTSGESCHENK", "FR": "CADEAU DE NOËL", "ES": "REGALO DE NAVIDAD", "IT": "REGALO DI NATALE",
+        "NL": "KERSTCADEAU", "SE": "JULKLAPPSTIPS", "NO": "JULEGAVETIPS", "FI": "JOULULAHJAIDEA",
+        "PL": "PREZENT ŚWIĄTECZNY", "EN": "CHRISTMAS GIFT"
+    },
+    "xm_2": {
+        "DE": "WEIHNACHTS-SPECIAL", "FR": "SPÉCIAL NOËL", "ES": "ESPECIAL NAVIDAD", "IT": "SPECIALE NATALE",
+        "NL": "KERST SPECIAL", "SE": "JULSPECIAL", "NO": "JULESPESIAL", "FI": "JOULUN ERIKOISETU",
+        "PL": "OFERTA ŚWIĄTECZNA", "EN": "XMAS SPECIAL"
+    },
+    "xm_3": {
+        "DE": "❄️ TOP WEIHNACHTSGESCHENK ❄️", "FR": "❄️ IDÉE CADEAU DE NOËL ❄️", "ES": "❄️ IDEA DE REGALO NAVIDEÑO ❄️", "IT": "❄️ IDEA REGALO DI NATALE ❄️",
+        "NL": "❄️ PERFECT KERSTCADEAU ❄️", "SE": "❄️ PERFEKT JULKLAPP ❄️", "NO": "❄️ PERFEKT JULEGAVE ❄️", "FI": "❄️ TÄYDELLINEN JOULULAHJA ❄️",
+        "PL": "❄️ IDEALNY PREZENT NA ŚWIĘTA ❄️", "EN": "❄️ CHRISTMAS GIFT IDEA ❄️"
+    },
+    "xm_4": {
+        "DE": "WEIHNACHTS-SALE", "FR": "PROMO DE NOËL", "ES": "OFERTA NAVIDEÑA", "IT": "OFFERTA DI NATALE",
+        "NL": "KERSTUITVERKOOP", "SE": "JULREA", "NO": "JULESALG", "FI": "JOULUALE",
+        "PL": "ŚWIĄTECZNA OKAZJA", "EN": "HOLIDAY SALE"
+    },
+    "xm_5": {
+        "DE": "FESTTAGS-FAVORIT", "FR": "COUP DE CŒUR NOËL", "ES": "FAVORITO DE NAVIDAD", "IT": "PREFERITO DI NATALE",
+        "NL": "KERST FAVORIET", "SE": "JULFAVORIT", "NO": "JULEFAVORITT", "FI": "JOULUN SUOSIKKI",
+        "PL": "ŚWIĄTECZNY HIT", "EN": "TOP XMAS PICK"
+    }
+}
+
+BADGE_CATALOG = {
+    "🖤 Black Friday (黑五狂欢)": {
+        "bf_1": {
+            "name": "素材 1：黑金经典胶囊标 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#111111,#2B2B2B); color:#F5D061; padding:4px 10px; border-radius:999px; font-size:10px; font-weight:800; letter-spacing:0.5px; box-shadow:0 2px 6px rgba(0,0,0,0.3); border:1px solid #F5D061; line-height:1.2; white-space:nowrap;">🖤 {text}</div>'
+        },
+        "bf_2": {
+            "name": "素材 2：红黑热销爆款标 (右上)",
+            "tpl": '<div style="position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#FF2A2A,#B80000); color:#FFFFFF; padding:4px 9px; border-radius:8px 2px 8px 8px; font-size:10px; font-weight:800; letter-spacing:0.4px; box-shadow:0 2px 8px rgba(255,42,42,0.4); line-height:1.2; white-space:nowrap;">🔥 {text}</div>'
+        },
+        "bf_3": {
+            "name": "素材 3：黑金限时特惠底栏 (底部)",
+            "tpl": '<div style="position:absolute; bottom:0; left:0; right:0; z-index:5; pointer-events:none; background:linear-gradient(90deg,rgba(15,15,15,0.92),rgba(40,40,40,0.92)); color:#FFD700; padding:5px 6px; text-align:center; font-size:10px; font-weight:800; letter-spacing:0.6px; border-top:1px solid rgba(255,215,0,0.5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{text}</div>'
+        },
+        "bf_4": {
+            "name": "素材 4：黑五双色拼接贴纸 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; display:inline-flex; align-items:center; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.28); line-height:1.1;"><span style="background:#FF3B30; color:#FFFFFF; padding:4px 6px; font-size:10px; font-weight:900;">BF</span><span style="background:#111111; color:#FFFFFF; padding:4px 8px; font-size:10px; font-weight:700; white-space:nowrap;">{text}</span></div>'
+        },
+        "bf_5": {
+            "name": "素材 5：黑曜石鎏金框徽章 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:rgba(17,17,17,0.88); color:#FFE082; padding:4px 9px; border-radius:4px; font-size:10px; font-weight:800; border:1.5px solid #D4AF37; box-shadow:0 2px 8px rgba(0,0,0,0.35); letter-spacing:0.5px; line-height:1.2; white-space:nowrap;">✨ {text}</div>'
+        }
+    },
+    "💻 Cyber Monday (网购星期一)": {
+        "cm_1": {
+            "name": "素材 1：赛博霓虹紫蓝胶囊 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#6366F1,#A855F7); color:#FFFFFF; padding:4px 10px; border-radius:999px; font-size:10px; font-weight:800; letter-spacing:0.5px; box-shadow:0 2px 8px rgba(99,102,241,0.45); border:1px solid rgba(255,255,255,0.4); line-height:1.2; white-space:nowrap;">💻 {text}</div>'
+        },
+        "cm_2": {
+            "name": "素材 2：极光青蓝闪购角标 (右上)",
+            "tpl": '<div style="position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#00F2FE,#4FACFE); color:#0B132B; padding:4px 9px; border-radius:8px 2px 8px 8px; font-size:10px; font-weight:900; letter-spacing:0.4px; box-shadow:0 2px 8px rgba(0,242,254,0.45); line-height:1.2; white-space:nowrap;">🚀 {text}</div>'
+        },
+        "cm_3": {
+            "name": "素材 3：网一数字狂欢底栏 (底部)",
+            "tpl": '<div style="position:absolute; bottom:0; left:0; right:0; z-index:5; pointer-events:none; background:linear-gradient(90deg,rgba(15,23,42,0.92),rgba(59,7,100,0.92)); color:#38BDF8; padding:5px 6px; text-align:center; font-size:10px; font-weight:800; letter-spacing:0.6px; border-top:1px solid rgba(56,189,248,0.5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{text}</div>'
+        },
+        "cm_4": {
+            "name": "素材 4：赛博双拼科技贴纸 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; display:inline-flex; align-items:center; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.3); line-height:1.1;"><span style="background:#00F5D4; color:#0F172A; padding:4px 6px; font-size:10px; font-weight:900;">CM</span><span style="background:#1E1B4B; color:#FFFFFF; padding:4px 8px; font-size:10px; font-weight:700; white-space:nowrap;">{text}</span></div>'
+        },
+        "cm_5": {
+            "name": "素材 5：未来感流光框徽章 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:rgba(15,23,42,0.9); color:#22D3EE; padding:4px 9px; border-radius:4px; font-size:10px; font-weight:800; border:1.5px solid #22D3EE; box-shadow:0 0 8px rgba(34,211,238,0.4); letter-spacing:0.5px; line-height:1.2; white-space:nowrap;">🌐 {text}</div>'
+        }
+    },
+    "🎄 Christmas (圣诞礼遇季)": {
+        "xm_1": {
+            "name": "素材 1：圣诞红金经典胶囊 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#C1121F,#800016); color:#FFF8D6; padding:4px 10px; border-radius:999px; font-size:10px; font-weight:800; letter-spacing:0.4px; box-shadow:0 2px 6px rgba(193,18,31,0.35); border:1px solid #F4D35E; line-height:1.2; white-space:nowrap;">🎄 {text}</div>'
+        },
+        "xm_2": {
+            "name": "素材 2：松石绿节日礼盒标 (右上)",
+            "tpl": '<div style="position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:linear-gradient(135deg,#1B4332,#2D6A4F); color:#FFE5EC; padding:4px 9px; border-radius:8px 2px 8px 8px; font-size:10px; font-weight:800; letter-spacing:0.4px; box-shadow:0 2px 6px rgba(27,67,50,0.35); border:1px solid #D8F3DC; line-height:1.2; white-space:nowrap;">🎅 {text}</div>'
+        },
+        "xm_3": {
+            "name": "素材 3：冬日雪花温馨底栏 (底部)",
+            "tpl": '<div style="position:absolute; bottom:0; left:0; right:0; z-index:5; pointer-events:none; background:linear-gradient(90deg,rgba(164,22,26,0.92),rgba(27,67,50,0.92)); color:#FFF3B0; padding:5px 6px; text-align:center; font-size:10px; font-weight:800; letter-spacing:0.5px; border-top:1px solid rgba(255,243,176,0.5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{text}</div>'
+        },
+        "xm_4": {
+            "name": "素材 4：圣诞双色丝带贴纸 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; display:inline-flex; align-items:center; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.25); line-height:1.1;"><span style="background:#2D6A4F; color:#FFD166; padding:4px 6px; font-size:10px; font-weight:900;">🎁</span><span style="background:#C1121F; color:#FFFFFF; padding:4px 8px; font-size:10px; font-weight:700; white-space:nowrap;">{text}</span></div>'
+        },
+        "xm_5": {
+            "name": "素材 5：璀璨暖金节日徽章 (左上)",
+            "tpl": '<div style="position:absolute; top:8px; left:8px; z-index:5; pointer-events:none; background:rgba(128,0,22,0.9); color:#FFE6A7; padding:4px 9px; border-radius:4px; font-size:10px; font-weight:800; border:1.5px solid #FFD166; box-shadow:0 2px 8px rgba(128,0,22,0.35); letter-spacing:0.4px; line-height:1.2; white-space:nowrap;">🔔 {text}</div>'
+        }
+    }
+}
+
+def get_badge_html(badge_id, product_url=""):
+    """根据所选标签 ID 与商品链接自动生成对应国家语言的 HTML 标签代码"""
+    if not badge_id:
+        return ""
+    lang = detect_lang_from_url(product_url)
+    localized_text = BADGE_TRANSLATIONS.get(badge_id, {}).get(lang) or BADGE_TRANSLATIONS.get(badge_id, {}).get("EN", "SPECIAL OFFER")
+    for theme_dict in BADGE_CATALOG.values():
+        if badge_id in theme_dict:
+            return theme_dict[badge_id]["tpl"].format(text=localized_text)
+    return ""
+
+# ================= HTML 响应式模板库 (Dofollow 权重内链 + 动态营销标签版) =================
 templates = {
     "模板 1：左右结构 (规格列表版)": {
         "type": "single",
@@ -92,6 +275,7 @@ templates = {
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 180px;">
     <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
+        {badge_html}
         <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
@@ -117,6 +301,7 @@ templates = {
 {json_ld}
 <div style="display: flex; flex-wrap: nowrap; align-items: stretch; border-radius: 12px; overflow: hidden; background-color: #FAFAFA; border: 1px solid #eaeaea; font-family: sans-serif; width: 100%; box-sizing: border-box; margin-bottom: 20px; min-height: 160px;">
     <div style="flex: 0 0 45%; max-width: 45%; padding: 0; background-color: #ffffff; position: relative; overflow: hidden; border-radius: 12px 0 0 12px;">
+        {badge_html}
         <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; margin: 0; display: block; border-radius: 12px 0 0 12px;">
         </a>
@@ -138,7 +323,8 @@ templates = {
         "html": """
 {json_ld}
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
-    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
+    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center; position: relative;">
+        {badge_html}
         <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; outline: none;">
         </a>
@@ -157,7 +343,8 @@ templates = {
         "html": """
 {json_ld}
 <div style="background-color: #FFF8EC; border-radius: 24px; padding: 16px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; width: 100%; max-width: 350px; box-sizing: border-box; border: 1px solid #F7E8D5; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin: 0 auto 20px auto;">
-    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 14px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center;">
+    <div style="width: 100%; height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 14px; background-color: #fff; display: flex; align-items: center; justify-content: center; text-align:center; position: relative;">
+        {badge_html}
         <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
             <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; outline: none;">
         </a>
@@ -180,7 +367,8 @@ templates = {
 """,
         "item_html": """
 <div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-right: 16px; box-sizing: border-box;">
-    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
+    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center; position: relative;">
+        {badge_html}
         <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
     <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
@@ -225,7 +413,8 @@ templates = {
 """,
         "item_html": """
 <div style="display: inline-block; vertical-align: top; width: 220px; white-space: normal; background-color: #FFFFFF; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-left: 10px; margin-right: 6px; box-sizing: border-box; scroll-snap-align: start;">
-    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center;">
+    <div style="width: 100%; height: 180px; border-radius: 12px; overflow: hidden; margin-bottom: 12px; background-color: #f9f9f9; text-align: center; position: relative;">
+        {badge_html}
         <a href="{buy_link}" target="_blank"><img src="{image_url}" alt="{title}" style="max-width: 100%; max-height: 180px; object-fit: contain;"></a>
     </div>
     <h3 style="margin: 0 0 12px 0; color: #333333; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{title}">{title}</h3>
@@ -250,7 +439,8 @@ templates = {
 </div>
 """,
         "item_html": """
-<div style="flex: 1 1 0; min-width: 0; border-radius: 14px; overflow: hidden; background-color: #FFFFFF; box-shadow: 0 4px 12px rgba(0,0,0,0.05); aspect-ratio: 1 / 1;">
+<div style="flex: 1 1 0; min-width: 0; border-radius: 14px; overflow: hidden; background-color: #FFFFFF; box-shadow: 0 4px 12px rgba(0,0,0,0.05); aspect-ratio: 1 / 1; position: relative;">
+    {badge_html}
     <a href="{buy_link}" target="_blank" style="display: block; width: 100%; height: 100%;">
         <img src="{image_url}" alt="{title}" style="width: 100%; height: 100%; object-fit: cover; border: none; display: block;">
     </a>
@@ -276,7 +466,6 @@ def is_size_spec_line(line_str):
     l_lower = str(line_str).lower().strip()
     if any(kw in l_lower for kw in SIZE_KEYWORDS):
         return True
-    # 拦截包含明显尺寸单位（如 10x15 cm, 15 mm, 5 inch）的条目
     if re.search(r'\b\d+(?:[.,]\d+)?\s*(?:cm|mm|inch|in|zoll)\b', l_lower):
         return True
     return False
@@ -430,7 +619,6 @@ def extract_product_details(product_url, preselected_image=None):
 
     text_content = soup.get_text(separator='\n', strip=True)[:5000]
     
-    # 【核心升级】：在 Prompt 中明确禁止提取任何尺寸/大小/重量信息
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
     1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If the source is German, output German). DO NOT translate to English.
     2. "price": The true product price exactly as written.
@@ -584,7 +772,6 @@ def generate_single_json_ld(title, image_url, price, buy_link, return_days=30, d
     return f'\n<div style="display: none; visibility: hidden; height: 0; width: 0; overflow: hidden;">\n<script type="application/ld+json">\n{json.dumps(ld, ensure_ascii=False)}\n</script>\n</div>\n'
 
 def generate_carousel_json_ld(products_data):
-    # 若多张图片属于同一个商品链接，自动合并为单个 Product Schema，避免重复定义同一商品；若为多个不同商品，则构建去重后的 ItemList
     unique_by_url = {}
     for data in products_data:
         u = data.get("buy_link", "")
@@ -764,24 +951,86 @@ if st.session_state.step >= 2 and st.session_state.matched_products:
                 st.rerun()
 
 if st.session_state.step >= 3 and st.session_state.selected_keys:
-    st.markdown("### 步骤 3：选择数据输出模式")
+    st.markdown("### 步骤 3：配置促销标签与选择模板")
+
+    # 获取第一个选中商品的 URL 与缩略图，用于在步骤 3 实时展示对应国家语言的标签预览
+    key_to_item_preview = {p.get("candidate_key"): p for p in st.session_state.matched_products}
+    first_selected_item = next((key_to_item_preview[k] for k in st.session_state.selected_keys if k in key_to_item_preview), None)
+    sample_url_for_lang = first_selected_item["url"] if first_selected_item else "https://fr.callie.com"
+    sample_thumb_for_preview = first_selected_item["thumbnail"] if first_selected_item and first_selected_item.get("thumbnail") else dummy_image
+    detected_preview_lang = detect_lang_from_url(sample_url_for_lang)
+
+    # ---- 步骤 3.1：可选促销标签设置 ----
+    st.markdown("#### 🏷️ 3.1 是否添加大促/节日营销标签？")
+    enable_badge_choice = st.radio(
+        "是否启用促销标签：",
+        ["❌ 否，不添加标签 (直接选择模板)", "✅ 是，为商品卡片添加促销标签 (Black Friday / Cyber Monday / Christmas)"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    if enable_badge_choice.startswith("❌"):
+        st.session_state.selected_badge_id = None
+    else:
+        with st.container():
+            st.info(f"🌍 已根据您勾选的商品自动识别目标站点语言：**`{detected_preview_lang}`**（下方素材与最终生成卡片将自动按各商品对应语言渲染文案）。")
+            theme_choice = st.radio(
+                "🎉 请选择促销活动主题：",
+                list(BADGE_CATALOG.keys()),
+                horizontal=True
+            )
+            theme_materials = BADGE_CATALOG[theme_choice]
+            mat_keys = list(theme_materials.keys())
+
+            # 若当前未选或切换了主题，默认选中当前主题的第 1 款素材
+            if st.session_state.selected_badge_id not in mat_keys:
+                st.session_state.selected_badge_id = mat_keys[0]
+
+            st.markdown("**🎨 请点击选择以下 5 款标签素材之一（选中后下方模板示例图将实时同步更新）：**")
+            mat_cols = st.columns(5)
+            for m_col, (m_id, m_info) in zip(mat_cols, theme_materials.items()):
+                with m_col:
+                    is_active = (st.session_state.selected_badge_id == m_id)
+                    border_style = "2px solid #1A73E8" if is_active else "1px solid #DADCE0"
+                    badge_preview_snippet = get_badge_html(m_id, sample_url_for_lang)
+                    mat_card_html = f"""
+                    <html><body style="margin:0; padding:4px; font-family:sans-serif; background:transparent;">
+                        <div style="border:{border_style}; border-radius:12px; padding:8px; background:#FFFFFF; text-align:center;">
+                            <div style="font-size:11px; font-weight:bold; color:#202124; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{m_info['name']}</div>
+                            <div style="width:100%; height:120px; border-radius:8px; overflow:hidden; position:relative; background:#F3F4F6;">
+                                {badge_preview_snippet}
+                                <img src="{sample_thumb_for_preview}" style="width:100%; height:100%; object-fit:cover; display:block;">
+                            </div>
+                        </div>
+                    </body></html>
+                    """
+                    st.components.v1.html(mat_card_html, height=165, scrolling=False)
+                    btn_label = "✅ 当前已选" if is_active else f"选用【{m_info['name'].split('：')[0]}】"
+                    if st.button(btn_label, key=f"select_mat_{m_id}", type="primary" if is_active else "secondary", use_container_width=True):
+                        st.session_state.selected_badge_id = m_id
+                        st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### 🎨 3.2 选择数据输出模式与卡片模板")
     mode_choice = st.radio("请选择：", ["🎨 生成高转化商品卡片 (包含完整排版与样式)", "🖼️ 仅生成纯净原图 (纯粹 SEO 优化，抗干扰)"], horizontal=True, label_visibility="collapsed")
     
+    # 生成当前预览使用的标签 HTML（若选择“否”则为空字符串）
+    preview_badge_html = get_badge_html(st.session_state.selected_badge_id, sample_url_for_lang)
+
     if mode_choice.startswith("🎨"):
         st.session_state.output_mode = "card"
         
-        # 预览数据已彻底移除 Size 字段
         dummy_data = {
             "image_url": dummy_image, 
             "title": "Custom Engraved Family Ring", 
             "price": "28.00 €", 
             "specs": "<ul style='margin:0; padding-left:16px; color:#555;'><li style='margin-bottom:3px;'><strong>Material:</strong> Sterling Silver</li><li><strong>Craft:</strong> Custom Engraved</li></ul>", 
-            "buy_link": "https://fr.callie.com", 
+            "buy_link": sample_url_for_lang, 
             "cta_text": "Add To Cart", 
-            "json_ld": ""
+            "json_ld": "",
+            "badge_html": preview_badge_html
         }
         
-        # 每行展示最多 4 个模板预览框，保持宽敞美观
         tmpl_items = list(templates.items())
         cols_per_tmpl_row = 4
         for r_idx in range(0, len(tmpl_items), cols_per_tmpl_row):
@@ -815,14 +1064,13 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
 if st.session_state.step >= 4:
     st.markdown("### 步骤 4：最终生成结果")
     
-    # 严格按照勾选顺序排列选中的图片项
     key_to_item = {p.get("candidate_key"): p for p in st.session_state.matched_products}
     selected_items = [key_to_item[k] for k in st.session_state.selected_keys if k in key_to_item]
     
     my_bar = st.progress(0, text="正在逐个深入详情页提取数据...")
     all_extracted_data = []
     generated_single_cards = [] 
-    url_details_cache = {}  # 缓存机制：若多张图片属于同一商品链接，避免重复调用 AI 提取
+    url_details_cache = {}
     
     for i, item in enumerate(selected_items):
         prod_url = item["url"]
@@ -854,6 +1102,10 @@ if st.session_state.step >= 4:
             details_data["specs_formatted"] = specs_str
             schema_desc = details_data.get("page_description") or specs_plain or details_data.get("title", "")
             details_data["schema_description"] = schema_desc
+            
+            # 根据当前商品的 URL 动态生成对应语言的标签 HTML
+            item_badge_html = get_badge_html(st.session_state.selected_badge_id, details_data.get("buy_link", ""))
+            details_data["badge_html"] = item_badge_html
             all_extracted_data.append(details_data)
             
             ld_script = generate_single_json_ld(
@@ -867,7 +1119,7 @@ if st.session_state.step >= 4:
             )
             
             if st.session_state.output_mode == "image":
-                raw_img_html = f"""{ld_script}<div style="text-align: center; margin-bottom: 25px;"><a href="{details_data.get("buy_link")}" target="_blank" title="{details_data.get("title", "Callie Product")}"><img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05);"></a></div>"""
+                raw_img_html = f"""{ld_script}<div style="text-align: center; margin-bottom: 25px;"><div style="display: inline-block; position: relative; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">{item_badge_html}<a href="{details_data.get("buy_link")}" target="_blank" title="{details_data.get("title", "Callie Product")}"><img src="{details_data.get("image_url")}" alt="{details_data.get("title", "Callie Product")}" style="max-width: 100%; height: auto; border-radius: 8px; border: none; display: block;"></a></div></div>"""
                 generated_single_cards.append(raw_img_html)
                 st.markdown(f"**📝 原图预览: {details_data.get('title', item['title'])}**")
                 c1, c2 = st.columns([1, 1], gap="large")
@@ -878,7 +1130,16 @@ if st.session_state.step >= 4:
             else:
                 tmpl_config = templates[st.session_state.selected_template]
                 if tmpl_config["type"] == "single":
-                    card_html = tmpl_config["html"].format(image_url=details_data.get("image_url", ""), title=details_data.get("title", ""), price=details_data.get("price", ""), specs=specs_str, buy_link=details_data.get("buy_link", ""), cta_text=details_data.get("cta_text", "Buy Now"), json_ld=ld_script)
+                    card_html = tmpl_config["html"].format(
+                        image_url=details_data.get("image_url", ""),
+                        title=details_data.get("title", ""),
+                        price=details_data.get("price", ""),
+                        specs=specs_str,
+                        buy_link=details_data.get("buy_link", ""),
+                        cta_text=details_data.get("cta_text", "Buy Now"),
+                        json_ld=ld_script,
+                        badge_html=item_badge_html
+                    )
                     generated_single_cards.append(card_html)
                     st.markdown(f"**📝 卡片预览: {details_data.get('title', item['title'])}**")
                     c1, c2 = st.columns([1, 1], gap="large")
@@ -899,7 +1160,8 @@ if st.session_state.step >= 4:
             title=data.get("title", ""), 
             price=data.get("price", ""), 
             buy_link=data.get("buy_link", ""), 
-            cta_text=unified_cta_text
+            cta_text=unified_cta_text,
+            badge_html=data.get("badge_html", "")
         ) for data in all_extracted_data])
         
         final_carousel_html = templates[st.session_state.selected_template]["html"].replace("{carousel_items}", carousel_items_str).format(json_ld=ld_script)
@@ -913,18 +1175,17 @@ if st.session_state.step >= 4:
         st.markdown("**📝 以下是包含所选商品图片的拼图模式代码组件**")
         ld_script = generate_carousel_json_ld(all_extracted_data)
         
-        # 【核心逻辑】：无论是同一个商品的多张图，还是不同商品的图，统一取第一个选中商品图片的链接与 CTA 文案
         primary_buy_link = all_extracted_data[0].get("buy_link", "")
         primary_cta_text = all_extracted_data[0].get("cta_text", "Buy Now")
         
-        # 检查是否所有图片都来自同一个商品
         unique_urls = set(d.get("buy_link", "") for d in all_extracted_data)
         is_same_product = (len(unique_urls) == 1)
         
         collage_items_str = "".join([templates[st.session_state.selected_template]["item_html"].format(
             image_url=data.get("image_url", ""),
             title=data.get("title", ""),
-            buy_link=primary_buy_link if is_same_product else data.get("buy_link", primary_buy_link)
+            buy_link=primary_buy_link if is_same_product else data.get("buy_link", primary_buy_link),
+            badge_html=data.get("badge_html", "")
         ) for data in all_extracted_data])
         
         final_collage_html = templates[st.session_state.selected_template]["html"].replace("{collage_items}", collage_items_str).format(
