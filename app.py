@@ -288,7 +288,7 @@ def parse_price_to_float(price_str):
         return 0.0
 
 def format_price_like(ref_price_str, target_val):
-    """参照现价的货币符号位置与小数点格式（如 € 30,60），格式化原价（如 € 34,00）"""
+    """参照现价的货币符号位置与小数点格式（如 € 30,60 或 16,00 €），格式化原价"""
     ref = str(ref_price_str or "").strip()
     use_comma = ',' in ref or '€' in ref
     formatted_num = f"{target_val:.2f}".replace('.', ',') if use_comma else f"{target_val:.2f}"
@@ -300,7 +300,7 @@ def format_price_like(ref_price_str, target_val):
     return f"€ {formatted_num}"
 
 def build_price_display_html(price, original_price="", discount_text="", style_type="left_right"):
-    """动态生成带折后价、划线原价和橙色真实折扣标 (如 10% Korting) 的 HTML"""
+    """动态生成带折后价、划线原价和橙色真实折扣标 (如 10% Korting / 20% Réduction) 的 HTML"""
     price = str(price or "").strip()
     orig = str(original_price or "").strip()
     disc = str(discount_text or "").strip()
@@ -667,11 +667,101 @@ def ai_match_top_30(blog_text, product_list):
         return json.loads(clean_json_response(response.choices[0].message.content))
     except: return product_list[:30]
 
+# ================= 精准 DOM 节点提取函数 (对应图一 div.old 与图二 span.discount-text) =================
+def is_in_excluded_container(node):
+    """过滤掉底部推荐位、最近浏览、弹窗等无关容器内的节点"""
+    bad_ancestors = ['related', 'recommend', 'upsell', 'recent', 'history', 'footer', 'header', 'nav', 'modal', 'popup']
+    p = node.parent if node else None
+    depth = 0
+    while p and depth < 8:
+        cls_str = " ".join(p.get('class', [])).lower()
+        id_str = (p.get('id') or '').lower()
+        if any(b in cls_str or b in id_str for b in bad_ancestors):
+            return True
+        p = p.parent
+        depth += 1
+    return False
+
+def join_value_and_symbol(price_div):
+    """
+    将图一中的 <span class="value">16,00</span> 与 <span class="symbol"> €</span> 按原生 DOM 顺序无缝拼接，
+    避免 get_text('\n') 换行导致数字和货币符号分离
+    """
+    if not price_div:
+        return ""
+    spans = price_div.find_all('span', recursive=False)
+    if not spans:
+        spans = price_div.find_all('span')
+    if spans:
+        text = "".join(sp.get_text() for sp in spans)
+    else:
+        text = price_div.get_text(separator=" ", strip=True)
+    text = re.sub(r'\s+', ' ', text).strip()
+    # 美化类似 €30,60 为 € 30,60
+    if text.startswith('€') and not text.startswith('€ '):
+        text = '€ ' + text[1:]
+    return text
+
+def extract_exact_dom_pricing(soup):
+    """
+    直接匹配 Callie 页面 DOM 结构：
+    1. 现价: div.now.now-price / div.now-price
+    2. 划线价: div.old (内含 span.value 与 span.symbol)
+    3. 折扣信息: span.discount-text / .product-detail-trace-15 (位于 div.sale-item__price 内)
+    """
+    dom_sale_price = ""
+    dom_old_price = ""
+    dom_discount_text = ""
+
+    # 1. 匹配现价节点 div.now-price 并查找同级的 div.old
+    now_nodes = soup.select('div.now.now-price, div.now-price')
+    for now_node in now_nodes:
+        if is_in_excluded_container(now_node):
+            continue
+        candidate_sale = join_value_and_symbol(now_node)
+        if parse_price_to_float(candidate_sale) > 0:
+            dom_sale_price = candidate_sale
+            # 优先在同一个价格父容器内查找紧邻的 <div class="old">
+            if now_node.parent:
+                sibling_old = now_node.parent.select_one('div.old')
+                if sibling_old:
+                    candidate_old = join_value_and_symbol(sibling_old)
+                    if parse_price_to_float(candidate_old) > parse_price_to_float(dom_sale_price):
+                        dom_old_price = candidate_old
+            break
+
+    # 2. 若同级未找到，单独扫描主商品区的 div.old
+    if not dom_old_price:
+        for old_node in soup.select('div.old'):
+            if is_in_excluded_container(old_node):
+                continue
+            val_span = old_node.select_one('span.value')
+            sym_span = old_node.select_one('span.symbol')
+            if val_span or sym_span:
+                candidate_old = join_value_and_symbol(old_node)
+                if parse_price_to_float(candidate_old) > 0:
+                    if not dom_sale_price or parse_price_to_float(candidate_old) > parse_price_to_float(dom_sale_price):
+                        dom_old_price = candidate_old
+                        break
+
+    # 3. 匹配图二中的折扣文案节点 span.discount-text / .product-detail-trace-15
+    disc_nodes = soup.select('span.discount-text, .product-detail-trace-15, div.sale-item__price span')
+    for d_node in disc_nodes:
+        if is_in_excluded_container(d_node):
+            continue
+        d_txt = re.sub(r'\s+', ' ', d_node.get_text(strip=True)).strip()
+        if d_txt and '%' in d_txt and len(d_txt) <= 35:
+            dom_discount_text = d_txt
+            break
+
+    return {
+        "dom_sale_price": dom_sale_price,
+        "dom_old_price": dom_old_price,
+        "dom_discount_text": dom_discount_text
+    }
+
 def extract_authoritative_anchor_price(soup):
-    """
-    在清理 DOM 前，从页面 <meta> 或 <script type="application/ld+json"> 提取权威实付价数值（如 30.60），
-    以此作为锚点，彻底排除物流弹窗里的运费（€ 4,00 / € 9,00）和附加定制费（+€ 2,70）！
-    """
+    """从 <meta property="product:price:amount"> 或 JSON-LD 提取权威实付价数值兜底"""
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     if og_price and og_price.get('content'):
         v = parse_price_to_float(og_price.get('content'))
@@ -695,145 +785,6 @@ def extract_authoritative_anchor_price(soup):
             continue
     return 0.0
 
-def analyze_page_pricing_and_promo(soup, anchor_val=0.0):
-    """
-    锚点锁定 3 层提取法：
-    1. 优先扫描页面底部的 Subtotaal / Subtotal 小计汇总行（如: Subtotaal: €34,00 10% Korting € 30,60 (incl. btw)）
-    2. 扫描正文中紧邻锚点实付价（如 € 30,60）或紧邻税费说明 (incl. btw) 的 120 字符微窗口
-    3. 严禁跨区域把物流弹窗运费（€ 4,00 / € 9,00）抓入价格对，严禁凭空捏造折扣百分比
-    """
-    for tag in soup.find_all(['script', 'style', 'svg', 'noscript', 'head', 'header', 'nav', 'footer']):
-        tag.decompose()
-
-    h1_tag = soup.find('h1')
-    if h1_tag:
-        after_h1_nodes = [h1_tag.get_text(" ", strip=True)]
-        for s in h1_tag.find_all_next(string=True):
-            t = s.strip()
-            if t:
-                after_h1_nodes.append(t)
-            if sum(len(x) for x in after_h1_nodes) > 7500:
-                break
-        focused_text = "\n".join(after_h1_nodes)
-        flat_after_h1 = " ".join(after_h1_nodes)
-    else:
-        focused_text = soup.get_text(separator='\n', strip=True)[:7500]
-        flat_after_h1 = " ".join(focused_text.split('\n'))
-
-    price_pattern = r'(?<![+\d])(?:[€£$]\s*\d{1,5}(?:[.,]\d{2})\b|\b\d{1,5}(?:[.,]\d{2})\s*(?:€|EUR|kr|SEK|NOK|zł|PLN|£|GBP)\b)'
-    disc_pattern = r'\b\d{1,2}\s*%\s*(?:korting|rabatt|remise|descuento|sconto|rabat|alennus|zniżka|znizka|zniżki|off|sale|sparen|taniej|de\s+réduction|di\s+sconto|de\s+descuento)\b'
-
-    detected_sale_str = ""
-    detected_orig_str = ""
-    detected_disc_str = ""
-
-    # --- 通道 1：优先检查 Subtotaal / Subtotal 小计汇总区（Callie 页面最干净的价格三元组） ---
-    sub_match = re.search(r'(?:Subtotaal|Subtotal|Zwischensumme|Sous-total|Subtotale|Suma częściowa)\s*:?\s*([\s\S]{1,160})', flat_after_h1, re.IGNORECASE)
-    if sub_match:
-        sub_window = sub_match.group(1)
-        # 在 (incl. btw) 或下一个表单标签后截断
-        sub_window = re.split(r'(?:\(\s*incl\.|\(\s*inkl\.|\bAantal\b|\bQuantity\b)', sub_window, flags=re.IGNORECASE)[0]
-        sub_tokens = re.findall(price_pattern, sub_window, flags=re.IGNORECASE)
-        sub_prices = []
-        for tok in sub_tokens:
-            v = parse_price_to_float(tok)
-            if v > 1.0:
-                sub_prices.append((v, re.sub(r'\s+', ' ', tok).strip()))
-
-        sub_disc = re.findall(disc_pattern, sub_window, flags=re.IGNORECASE)
-        if sub_disc:
-            detected_disc_str = re.sub(r'\s+', ' ', sub_disc[0]).strip()
-
-        if sub_prices:
-            if anchor_val > 0:
-                # 必须存在与 anchor_val 一致的实付价
-                sale_matches = [tok for v, tok in sub_prices if abs(v - anchor_val) < 0.05]
-                orig_matches = [(v, tok) for v, tok in sub_prices if v > anchor_val + 0.05 and v <= anchor_val * 2.5]
-                if sale_matches:
-                    detected_sale_str = sale_matches[0]
-                    if orig_matches:
-                        detected_orig_str = format_price_like(detected_sale_str, orig_matches[0][0])
-            else:
-                unique_sub = {}
-                for v, tok in sub_prices:
-                    unique_sub.setdefault(v, tok)
-                if len(unique_sub) >= 2:
-                    s_vals = sorted(unique_sub.keys())
-                    if s_vals[0] < s_vals[-1] <= s_vals[0] * 2.5:
-                        detected_sale_str = unique_sub[s_vals[0]]
-                        detected_orig_str = format_price_like(detected_sale_str, s_vals[-1])
-                        anchor_val = s_vals[0]
-
-    # --- 通道 2：在正文中以实付价 anchor_val 或税费标识 (incl. btw) 为锚点，仅扫描其紧邻的 120 字符微窗口 ---
-    if not detected_sale_str or not detected_orig_str or not detected_disc_str:
-        # 优先定位 (incl. btw) / (inkl. MwSt.) 前后的主价格框
-        tax_match = re.search(r'([\s\S]{0,120})(?:\(\s*incl\.\s*btw\s*\)|\(\s*inkl\.\s*mwst\.?\s*\)|\(\s*ttc\s*\)|\(\s*iva\s*incl\.?\s*\))([\s\S]{0,80})', flat_after_h1, re.IGNORECASE)
-        micro_windows = []
-        if tax_match:
-            micro_windows.append(tax_match.group(0))
-
-        # 同时定位所有数值等于 anchor_val 的价格出现位置，取其前后紧邻微窗口
-        if anchor_val > 0:
-            for m in re.finditer(price_pattern, flat_after_h1, flags=re.IGNORECASE):
-                tok = m.group(0)
-                v = parse_price_to_float(tok)
-                if abs(v - anchor_val) < 0.05:
-                    if not detected_sale_str:
-                        detected_sale_str = re.sub(r'\s+', ' ', tok).strip()
-                    start_w = max(0, m.start() - 40)
-                    end_w = min(len(flat_after_h1), m.end() + 120)
-                    micro_windows.append(flat_after_h1[start_w:end_w])
-
-        for win in micro_windows:
-            # 截断在定制选项之前
-            win_clean = re.split(r'(?:\+\s*[€£$]|\bDoos\b|\bMateriaal\b|\bMaterial\b|\bAantal\b)', win, flags=re.IGNORECASE)[0]
-            if not detected_disc_str:
-                d_m = re.findall(disc_pattern, win_clean, flags=re.IGNORECASE)
-                if d_m:
-                    detected_disc_str = re.sub(r'\s+', ' ', d_m[0]).strip()
-
-            win_tokens = re.findall(price_pattern, win_clean, flags=re.IGNORECASE)
-            win_prices = [(parse_price_to_float(t), re.sub(r'\s+', ' ', t).strip()) for t in win_tokens if parse_price_to_float(t) > 1.0]
-
-            if anchor_val > 0:
-                if not detected_sale_str:
-                    for v, t in win_prices:
-                        if abs(v - anchor_val) < 0.05:
-                            detected_sale_str = t
-                            break
-                if not detected_orig_str and detected_sale_str:
-                    for v, t in win_prices:
-                        if anchor_val + 0.05 < v <= anchor_val * 2.5:
-                            detected_orig_str = format_price_like(detected_sale_str, v)
-                            break
-            else:
-                u_win = {}
-                for v, t in win_prices:
-                    u_win.setdefault(v, t)
-                if len(u_win) >= 2:
-                    s_v = sorted(u_win.keys())
-                    if s_v[0] < s_v[-1] <= s_v[0] * 2.5:
-                        detected_sale_str = u_win[s_v[0]]
-                        detected_orig_str = format_price_like(detected_sale_str, s_v[-1])
-                        anchor_val = s_v[0]
-
-    # 若抓到了实付价和紧邻的折扣标（如 10% Korting），但划线原价因粘连未被正则捕获，用实付价与真实折扣标精准还原原价
-    if detected_sale_str and not detected_orig_str and detected_disc_str:
-        p_val = parse_price_to_float(detected_sale_str)
-        m_pct = re.search(r'(\d{1,2})\s*%', detected_disc_str)
-        if p_val > 0 and m_pct:
-            pct = int(m_pct.group(1))
-            if 1 <= pct <= 75:
-                calc_orig = round(p_val / (1.0 - pct / 100.0), 2)
-                detected_orig_str = format_price_like(detected_sale_str, calc_orig)
-
-    return {
-        "focused_text": focused_text[:5000],
-        "detected_sale_str": detected_sale_str,
-        "detected_orig_str": detected_orig_str,
-        "detected_disc_str": detected_disc_str
-    }
-
 def extract_product_details(product_url, preselected_image=None):
     soup = get_soup(product_url)
     if not soup: return None
@@ -854,32 +805,43 @@ def extract_product_details(product_url, preselected_image=None):
     og_desc_tag = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
     page_desc = og_desc_tag.get('content', '').strip() if og_desc_tag and og_desc_tag.get('content') else ""
 
-    # 第 1 步：提取权威实付价锚点（如 30.60），彻底屏蔽运费 4.00 / 9.00
+    # 第 1 步：直接通过 CSS 选择器匹配 div.now-price, div.old, span.discount-text
+    dom_pricing = extract_exact_dom_pricing(soup)
     anchor_val = extract_authoritative_anchor_price(soup)
 
-    # 第 2 步：在锚点微窗口与 Subtotaal 汇总行提取紧邻原价与真实折扣标
-    promo_info = analyze_page_pricing_and_promo(soup, anchor_val=anchor_val)
-    focused_text = promo_info["focused_text"]
+    # 清理无关标签后提取 <h1> 之后的文本供 AI 总结标题与规格
+    for tag in soup.find_all(['script', 'style', 'svg', 'noscript', 'head', 'header', 'nav', 'footer']):
+        tag.decompose()
+    h1_tag = soup.find('h1')
+    if h1_tag:
+        after_h1_nodes = [h1_tag.get_text(" ", strip=True)]
+        for s in h1_tag.find_all_next(string=True):
+            t = s.strip()
+            if t: after_h1_nodes.append(t)
+            if sum(len(x) for x in after_h1_nodes) > 5000: break
+        focused_text = "\n".join(after_h1_nodes)
+    else:
+        focused_text = soup.get_text(separator='\n', strip=True)[:5000]
 
     hints = []
-    if anchor_val > 0:
-        hints.append(f"[CRITICAL PRICE ANCHOR]: The true product selling price is {anchor_val:.2f}. NEVER use shipping fees (like 4.00 or 9.00) as the product price!")
-    if promo_info["detected_sale_str"]:
-        hints.append(f"[VERIFIED CURRENT PRICE]: {promo_info['detected_sale_str']}")
-    if promo_info["detected_orig_str"]:
-        hints.append(f"[VERIFIED ORIGINAL PRICE]: {promo_info['detected_orig_str']}")
-    if promo_info["detected_disc_str"]:
-        hints.append(f"[VERIFIED DISCOUNT BADGE]: {promo_info['detected_disc_str']}")
+    if dom_pricing["dom_sale_price"]:
+        hints.append(f"[DOM EXACT CURRENT PRICE]: {dom_pricing['dom_sale_price']}")
+    elif anchor_val > 0:
+        hints.append(f"[META SELLING PRICE]: {anchor_val:.2f}")
+    if dom_pricing["dom_old_price"]:
+        hints.append(f"[DOM EXACT ORIGINAL PRICE (div.old)]: {dom_pricing['dom_old_price']}")
+    if dom_pricing["dom_discount_text"]:
+        hints.append(f"[DOM EXACT DISCOUNT TEXT (span.discount-text)]: {dom_pricing['dom_discount_text']}")
     hint_block = "\n".join(hints)
     
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
-    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If Dutch/German, output Dutch/German). DO NOT translate to English.
-    2. "price": The current selling/discounted product price with currency symbol (e.g., "€ 30,60").
-    3. "original_price": The higher crossed-out/original price before discount (e.g., "€ 34,00"). If none, output "".
-    4. "discount_text": The discount badge text on the page (e.g., "10% Korting"). If none, output "".
+    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If Dutch/French/German, output Dutch/French/German). DO NOT translate to English.
+    2. "price": The current selling product price with currency symbol (e.g., "€ 30,60" or "16,00 €").
+    3. "original_price": The crossed-out original price from div.old if present (e.g., "€ 34,00" or "16,00 €"). If none, output "".
+    4. "discount_text": The discount badge text from span.discount-text if present (e.g., "10% Korting" or "20% Réduction"). If none, output "".
     5. "return_days"
     6. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization, Package) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
-    7. "cta_text": Short action-oriented CTA button text (e.g., "In winkelwagen") in the ORIGINAL LANGUAGE.
+    7. "cta_text": Short action-oriented CTA button text (e.g., "In winkelwagen" / "Ajouter au panier") in the ORIGINAL LANGUAGE.
     RULES: NEVER extract shipping fees (e.g., € 4,00 / € 9,00) or option add-on prices (like +€ 2,70).
     {hint_block}
     Page Text:
@@ -889,25 +851,21 @@ def extract_product_details(product_url, preselected_image=None):
         response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"}, max_tokens=1500)
         result = json.loads(clean_json_response(response.choices[0].message.content))
 
-        # --- 第 3 步：Python 锚点强校验，确保绝不混入运费价格 ---
-        final_price = promo_info["detected_sale_str"] or str(result.get("price") or "").strip()
-        final_orig = promo_info["detected_orig_str"] or str(result.get("original_price") or "").strip()
-        final_disc = promo_info["detected_disc_str"] or str(result.get("discount_text") or "").strip()
+        # --- 第 2 步：若 DOM 选择器（div.now-price / div.old / span.discount-text）已直接命中，100% 优先采用 DOM 提取结果 ---
+        final_price = dom_pricing["dom_sale_price"] or str(result.get("price") or "").strip()
+        final_orig = dom_pricing["dom_old_price"] or str(result.get("original_price") or "").strip()
+        final_disc = dom_pricing["dom_discount_text"] or str(result.get("discount_text") or "").strip()
 
         p_float = parse_price_to_float(final_price)
-        if anchor_val > 0 and abs(p_float - anchor_val) > 0.1:
-            # 若 AI 抓偏了价格，强制用锚点数值修正
+        if not dom_pricing["dom_sale_price"] and anchor_val > 0 and abs(p_float - anchor_val) > 0.1:
             final_price = format_price_like(final_price or "€ 0,00", anchor_val)
             p_float = anchor_val
 
         o_float = parse_price_to_float(final_orig)
-        if o_float > p_float > 0 and o_float <= p_float * 2.5:
-            final_orig = format_price_like(final_price, o_float)
-        else:
+        if o_float <= p_float or o_float > p_float * 3.0:
             final_orig = ""
 
-        # 若没有有效原价，清空折扣标；且绝不自己凭空捏造百分比
-        if not final_orig and not promo_info["detected_disc_str"]:
+        if not final_orig and not dom_pricing["dom_discount_text"]:
             final_disc = ""
 
         result["price"] = final_price
@@ -1239,7 +1197,7 @@ if st.session_state.step >= 3 and st.session_state.selected_keys:
 
     # ---- 步骤 3.1：可选促销标签设置 ----
     st.markdown("#### 🏷️ 3.1 是否在商品图上叠加节日/大促角标？")
-    st.caption("💡 注：无论是否开启图片节日角标，只要商品着陆页本身存在**真实折扣价、划线原价或折扣标（如 `€ 30,60` / `€ 34,00` / `10% Korting`）**，系统都会自动提取并在卡片价格区域展示出来。")
+    st.caption("💡 注：无论是否开启图片节日角标，只要商品着陆页本身存在 `div.old`（划线原价）与 `span.discount-text`（折扣文案），系统都会自动提取并在卡片价格区域展示出来。")
     enable_badge_choice = st.radio(
         "是否启用图片促销角标：",
         ["❌ 否，不叠加图片节日角标 (仅展示页面自带真实价格与折扣)", "✅ 是，在商品图上添加节日大促角标 (Black Friday / Cyber Monday / Christmas)"],
