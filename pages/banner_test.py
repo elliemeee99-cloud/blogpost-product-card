@@ -8,6 +8,7 @@ import base64
 from urllib.parse import urljoin
 from PIL import Image, ImageOps
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="Banner与推送测试", layout="wide", initial_sidebar_state="collapsed")
@@ -80,39 +81,204 @@ if "b_banner_bytes" not in st.session_state: st.session_state.b_banner_bytes = N
 
 dummy_image = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%20fill%3D%22%23F3F4F6%22%2F%3E"
 
-# ================= 数据抓取与过滤函数 =================
+# ================= 数据抓取与 AI 海选函数 (同步修复版) =================
 def get_soup(url):
-    try: return BeautifulSoup(requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15).text, 'lxml')
-    except: return None
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        return BeautifulSoup(response.text, 'lxml')
+    except:
+        return None
 
 def fetch_blog_context(blog_url):
     soup = get_soup(blog_url)
     return soup.get_text(separator='\n', strip=True)[:4000] if soup else ""
 
+def extract_img_url_from_tag(img_tag, base_url):
+    """兼容懒加载属性与 svg 占位图，避免误杀第 2 个及之后的商品"""
+    if not img_tag:
+        return None
+    img_cls = " ".join(img_tag.get('class', [])).lower()
+    if 'logo' in img_cls:
+        return None
+
+    priority_attrs = ['data-src', 'data-original', 'data-lazy-src', 'data-lazy', 'data-echo', 'srcset', 'src']
+    candidates = []
+    for attr in priority_attrs:
+        val = img_tag.get(attr)
+        if val and isinstance(val, str):
+            candidates.append(val.strip().split(' ')[0])
+
+    for attr, val in img_tag.attrs.items():
+        if attr not in priority_attrs and isinstance(val, str) and ('http' in val or '/uploads/' in val):
+            candidates.append(val.strip().split(' ')[0])
+
+    for c in candidates:
+        c_lower = c.lower()
+        if any(bad in c_lower for bad in ['logo', 'icon', 'favicon', 'flag', 'payment']):
+            continue
+        if not c_lower.startswith('data:image') and any(ext in c_lower for ext in ['.jpg', '.jpeg', '.png', '.webp', '/uploads/']):
+            return urljoin(base_url, c).split('?')[0]
+
+    for c in candidates:
+        if c.lower().startswith('data:image'):
+            return dummy_image
+
+    return None
+
 def fetch_product_list(category_url):
     soup = get_soup(category_url)
     if not soup: return []
-    seen, products = set(), []
+
+    for nav_tag in soup.find_all(['header', 'nav', 'footer']):
+        nav_tag.decompose()
+
+    seen_urls = set()
+    products = []
+    non_product_paths = [
+        '/blog', '/login', '/register', '/cart', '/checkout', '/about', '/contact',
+        '/privacy', '/terms', '/shipping', '/return', '/faq', '/track', '/account',
+        '/wishlist', '/search', '/pages/', '/policy', '/help'
+    ]
+
     for a in soup.find_all('a', href=True):
-        title, clean_url = a.get_text(strip=True), urljoin(category_url, a['href']).split('?')[0]
-        if len(title) > 5 and clean_url not in seen and "javascript" not in clean_url:
-            img = a.find('img') or (a.parent and a.parent.find('img')) or (a.parent and a.parent.parent and a.parent.parent.find('img'))
-            if img and (img.get('data-src') or img.get('src')):
-                src = img.get('data-src') or img.get('src')
-                if not any(x in str(src).lower() for x in ['logo', 'icon', 'svg', 'gif']):
-                    seen.add(clean_url)
-                    img_url = urljoin(category_url, src).split('?')[0]
-                    products.append({"title": title, "url": clean_url, "thumbnail": img_url, "candidate_key": f"{clean_url}###0"})
-                    if len(products) >= 60: break
+        href = a['href'].strip()
+        if not href or href.startswith('#') or 'javascript' in href.lower() or href.startswith('mailto:'):
+            continue
+
+        full_url = urljoin(category_url, href)
+        clean_url = full_url.split('?')[0].rstrip('/')
+
+        if clean_url == category_url.split('?')[0].rstrip('/'):
+            continue
+        if any(np in clean_url.lower() for np in non_product_paths):
+            continue
+
+        img = a.find('img')
+        curr_p = a.parent
+        depth = 0
+        while not img and curr_p and depth < 3:
+            imgs_in_p = curr_p.find_all('img')
+            if 1 <= len(imgs_in_p) <= 4:
+                img = imgs_in_p[0]
+                break
+            curr_p = curr_p.parent
+            depth += 1
+
+        if not img:
+            continue
+
+        img_url = extract_img_url_from_tag(img, category_url)
+        if not img_url:
+            continue
+
+        title = a.get_text(" ", strip=True)
+        if len(title) <= 5:
+            title = (a.get('title') or img.get('alt') or '').strip()
+        if len(title) <= 5 and a.parent:
+            card_box = a.parent.parent if a.parent.parent else a.parent
+            if len(card_box.find_all('a')) <= 4:
+                t_cand = card_box.get_text(" ", strip=True)
+                if 5 < len(t_cand) <= 180:
+                    title = t_cand
+
+        if len(title) > 5:
+            if clean_url not in seen_urls:
+                seen_urls.add(clean_url)
+                products.append({
+                    "title": title[:120],
+                    "url": clean_url,
+                    "thumbnail": img_url,
+                    "candidate_key": f"{clean_url}###0"
+                })
+            elif img_url != dummy_image:
+                for existing_p in products:
+                    if existing_p["url"] == clean_url and existing_p["thumbnail"] == dummy_image:
+                        existing_p["thumbnail"] = img_url
+                        break
+
+        if len(products) >= 60:
+            break
+
     return products
 
+def resolve_missing_thumbnails(product_list):
+    """并发请求详情页补全因 JS 懒加载缺失的 og:image 高清缩略图"""
+    def _fetch_og(item):
+        if item.get("thumbnail") and item["thumbnail"] != dummy_image and not str(item["thumbnail"]).startswith("data:image"):
+            return item
+        s = get_soup(item["url"])
+        if s:
+            og = s.find('meta', property='og:image')
+            if og and og.get('content'):
+                item["thumbnail"] = urljoin(item["url"], og['content']).split('?')[0]
+            if not item.get("title") or len(item["title"]) < 6:
+                if s.title and s.title.string:
+                    item["title"] = s.title.string.strip()
+        return item
+
+    needs_resolve = [p for p in product_list if not p.get("thumbnail") or p["thumbnail"] == dummy_image or str(p["thumbnail"]).startswith("data:image")]
+    if not needs_resolve:
+        return product_list
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        list(executor.map(_fetch_og, needs_resolve))
+    return product_list
+
+def clean_json_response(content):
+    content = content.strip()
+    if content.startswith("```"):
+        start_idx = content.find('\n') + 1
+        end_idx = content.rfind('```')
+        if start_idx > 0 and end_idx > start_idx:
+            content = content[start_idx:end_idx].strip()
+    return content
+
 def ai_match_top_30(blog_text, product_list):
-    prompt = f"""Select AS MANY relevant products as possible (up to 30). Blog Post: {blog_text[:3000]} Candidates: {json.dumps(product_list, ensure_ascii=False)} Output JSON array only."""
+    if len(product_list) <= 15:
+        return product_list
+
+    slim_candidates = [{"title": p.get("title", ""), "url": p.get("url", ""), "thumbnail": p.get("thumbnail", "")} for p in product_list]
+    prompt = f"""You are an expert e-commerce recommender. Select AS MANY relevant products as possible from the candidates (aim for 20 to 30 products) that fit the blog post topic.
+Blog Post: {blog_text[:2500]}
+Product Candidates: {json.dumps(slim_candidates, ensure_ascii=False)}
+Output ONLY a valid JSON object with the key "products" containing the array of selected product objects:
+{{"products": [{{"title": "...", "url": "...", "thumbnail": "..."}}]}}"""
     try:
-        res = client_ds.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000).choices[0].message.content.strip()
-        if res.startswith("```"): res = res.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-        return json.loads(res)
-    except: return product_list[:30]
+        response = client_ds.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            max_tokens=4000
+        )
+        parsed = json.loads(clean_json_response(response.choices[0].message.content))
+        selected = []
+        if isinstance(parsed, list):
+            selected = [x for x in parsed if isinstance(x, dict) and "url" in x]
+        elif isinstance(parsed, dict):
+            if "products" in parsed and isinstance(parsed["products"], list):
+                selected = [x for x in parsed["products"] if isinstance(x, dict) and "url" in x]
+            else:
+                for v in parsed.values():
+                    if isinstance(v, list):
+                        selected = [x for x in v if isinstance(x, dict) and "url" in x]
+                        if selected:
+                            break
+                if not selected and "url" in parsed:
+                    selected = [parsed]
+
+        if len(selected) < min(6, len(product_list)):
+            seen_u = {x["url"] for x in selected}
+            for item in product_list:
+                if item["url"] not in seen_u:
+                    selected.append(item)
+                    seen_u.add(item["url"])
+                if len(selected) >= 30:
+                    break
+        return selected[:30]
+    except:
+        return product_list[:30]
 
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
@@ -346,7 +512,6 @@ def push_to_wordpress(wp_url, username, password, title, banner_bytes, post_id="
             if media_url:
                 current_content = f'\n<!-- wp:html -->\n<p style="text-align:center;"><img src="{media_url}" alt="Blog Banner" style="max-width:100%; height:auto; border-radius:12px; margin-bottom:20px;"/></p>\n<!-- /wp:html -->\n' + current_content
             
-            # 【核心修复】：更新已有文章时，绝不覆盖原文章的 title！仅更新正文与特色图片
             update_data = {'content': current_content}
             if media_id:
                 update_data['featured_media'] = media_id
@@ -388,13 +553,13 @@ with tab_b1:
                 raw_pool = fetch_product_list(b_shop_url)
             if not raw_pool: st.error("未能抓取到有效图片，请检查链接。")
             else:
-                with st.spinner("正在请求 AI 海选..."):
+                with st.spinner("正在请求 AI 海选并补全高清缩略图..."):
                     matched = ai_match_top_30(blog_text, raw_pool)
-                    extracted = matched.values() if isinstance(matched, dict) else [matched]
-                    valid_pool = [item for sublist in extracted if isinstance(sublist, list) for item in sublist if isinstance(item, dict) and "url" in item]
+                    valid_pool = [item for item in (matched if isinstance(matched, list) else []) if isinstance(item, dict) and "url" in item]
+                    valid_pool = resolve_missing_thumbnails(valid_pool)
                     for idx, p in enumerate(valid_pool):
                         p.setdefault("thumbnail", dummy_image)
-                        p.setdefault("candidate_key", f"{p['url']}###{idx}")
+                        p["candidate_key"] = f"{p['url']}###{idx}"
                     if valid_pool:
                         st.session_state.b_pool = valid_pool
                         st.session_state.b_step = 2
@@ -414,7 +579,7 @@ with tab_b2:
 
 if st.session_state.b_step >= 2 and st.session_state.b_pool:
     st.markdown("---")
-    st.markdown("### 步骤 2：选择用于生成 Banner 的商品图 (建议勾选 1-4 张)")
+    st.markdown(f"### 步骤 2：选择用于生成 Banner 的商品图 (共筛选出 {len(st.session_state.b_pool)} 个候选，建议勾选 1-4 张)")
     with st.form("b_selection_form"):
         b_temp_selected = []
         cols_per_row = 8
@@ -424,6 +589,8 @@ if st.session_state.b_step >= 2 and st.session_state.b_pool:
             for col, item in zip(cols, row_items):
                 with col:
                     st.image(item["thumbnail"], use_container_width=True)
+                    display_title = item.get('title', '')[:15] + "..." if len(item.get('title', '')) > 15 else item.get('title', '')
+                    st.caption(f"{display_title}")
                     c_key = item.get("candidate_key", item["url"])
                     if st.checkbox("选中此图", key=f"b_chk_{c_key}"):
                         b_temp_selected.append(c_key)
