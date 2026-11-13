@@ -5,6 +5,7 @@ from openai import OpenAI
 import json
 import re
 from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor
 
 # ================= 配置与初始化 =================
 st.set_page_config(page_title="智能商品卡片生成器", layout="wide", initial_sidebar_state="collapsed")
@@ -267,7 +268,7 @@ def get_badge_html(badge_id, product_url=""):
             return theme_dict[badge_id]["tpl"].format(text=localized_text)
     return ""
 
-# ================= 价格数值解析与真实促销 HTML 组装函数 =================
+# ================= 价格数值解析与促销 HTML 组装函数 =================
 def parse_price_to_float(price_str):
     if not price_str:
         return 0.0
@@ -288,7 +289,6 @@ def parse_price_to_float(price_str):
         return 0.0
 
 def format_price_like(ref_price_str, target_val):
-    """参照现价的货币符号位置与小数点格式（如 € 30,60 或 16,00 €），格式化原价"""
     ref = str(ref_price_str or "").strip()
     use_comma = ',' in ref or '€' in ref
     formatted_num = f"{target_val:.2f}".replace('.', ',') if use_comma else f"{target_val:.2f}"
@@ -300,7 +300,6 @@ def format_price_like(ref_price_str, target_val):
     return f"€ {formatted_num}"
 
 def build_price_display_html(price, original_price="", discount_text="", style_type="left_right"):
-    """动态生成带折后价、划线原价和橙色真实折扣标 (如 10% Korting / 20% Réduction) 的 HTML"""
     price = str(price or "").strip()
     orig = str(original_price or "").strip()
     disc = str(discount_text or "").strip()
@@ -543,7 +542,7 @@ def is_size_spec_line(line_str):
         return True
     return False
 
-# ================= 核心爬虫与 AI 函数 =================
+# ================= 核心爬虫与 AI 海选函数 (修复版) =================
 
 def get_soup(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
@@ -558,30 +557,159 @@ def fetch_blog_context(blog_url):
     if not soup: return ""
     return soup.get_text(separator='\n', strip=True)[:4000]
 
+def extract_img_url_from_tag(img_tag, base_url):
+    """
+    智能解析 <img> 标签：
+    1. 优先扫描所有属性中真实的高清图片地址（cloudfront / uploads / .jpg / .png / .webp）
+    2. 若着陆页使用了纯 svg 懒加载占位图，先返回 dummy_image 而不丢弃该商品，后续并发补全真图
+    """
+    if not img_tag:
+        return None
+    # 检查是否是明显的网站 Logo 或小图标
+    img_cls = " ".join(img_tag.get('class', [])).lower()
+    if 'logo' in img_cls:
+        return None
+
+    # 优先检查常见懒加载属性与 src
+    priority_attrs = ['data-src', 'data-original', 'data-lazy-src', 'data-lazy', 'data-echo', 'srcset', 'src']
+    candidates = []
+    for attr in priority_attrs:
+        val = img_tag.get(attr)
+        if val and isinstance(val, str):
+            candidates.append(val.strip().split(' ')[0])
+
+    # 再遍历所有其他自定义属性（如 v-lazy 等）
+    for attr, val in img_tag.attrs.items():
+        if attr not in priority_attrs and isinstance(val, str) and ('http' in val or '/uploads/' in val):
+            candidates.append(val.strip().split(' ')[0])
+
+    for c in candidates:
+        c_lower = c.lower()
+        if any(bad in c_lower for bad in ['logo', 'icon', 'favicon', 'flag', 'payment']):
+            continue
+        if not c_lower.startswith('data:image') and any(ext in c_lower for ext in ['.jpg', '.jpeg', '.png', '.webp', '/uploads/']):
+            return urljoin(base_url, c).split('?')[0]
+
+    # 如果是懒加载的 data:image/svg+xml 占位符，返回 dummy_image 保留该商品资格
+    for c in candidates:
+        if c.lower().startswith('data:image'):
+            return dummy_image
+
+    return None
+
 def fetch_product_list(category_url):
+    """
+    修复版海选商品列表抓取：
+    1. 移除顶部 header/nav 与底部 footer 导航干扰
+    2. 兼容懒加载 svg 占位符，绝不误杀第 2 个及之后的商品
+    3. 支持向上查找商品卡片容器内的图片与标题
+    """
     soup = get_soup(category_url)
     if not soup: return []
+
+    # 移除页头导航和页脚链接，防止把顶部菜单分类抓进商品池
+    for nav_tag in soup.find_all(['header', 'nav', 'footer']):
+        nav_tag.decompose()
+
     seen_urls = set()
     products = []
+    non_product_paths = [
+        '/blog', '/login', '/register', '/cart', '/checkout', '/about', '/contact',
+        '/privacy', '/terms', '/shipping', '/return', '/faq', '/track', '/account',
+        '/wishlist', '/search', '/pages/', '/policy', '/help'
+    ]
+
     for a in soup.find_all('a', href=True):
-        title = a.get_text(strip=True)
-        href = a['href']
+        href = a['href'].strip()
+        if not href or href.startswith('#') or 'javascript' in href.lower() or href.startswith('mailto:'):
+            continue
+
         full_url = urljoin(category_url, href)
-        clean_url = full_url.split('?')[0]
-        if len(title) > 5 and clean_url not in seen_urls and "javascript" not in clean_url:
-            img = a.find('img')
-            if not img and a.parent: img = a.parent.find('img')
-            if not img and a.parent and a.parent.parent: img = a.parent.parent.find('img')
-            if img:
-                src = img.get('data-src') or img.get('src')
-                if src:
-                    src_lower = str(src).lower()
-                    if not any(x in src_lower for x in ['logo', 'icon', 'svg', 'gif']):
-                        img_url = urljoin(category_url, src).split('?')[0]
-                        seen_urls.add(clean_url)
-                        products.append({"title": title, "url": clean_url, "thumbnail": img_url, "candidate_key": f"{clean_url}###0"})
-                        if len(products) >= 60: break
+        clean_url = full_url.split('?')[0].rstrip('/')
+
+        # 排除当前分类页自身及非商品功能页
+        if clean_url == category_url.split('?')[0].rstrip('/'):
+            continue
+        if any(np in clean_url.lower() for np in non_product_paths):
+            continue
+
+        # 查找关联的 <img>（向上最多查找 3 层单商品卡片容器）
+        img = a.find('img')
+        curr_p = a.parent
+        depth = 0
+        while not img and curr_p and depth < 3:
+            # 仅在当前父容器包含不超过 4 张图时才视为单商品卡片，防止爬到整个商品网格
+            imgs_in_p = curr_p.find_all('img')
+            if 1 <= len(imgs_in_p) <= 4:
+                img = imgs_in_p[0]
+                break
+            curr_p = curr_p.parent
+            depth += 1
+
+        if not img:
+            continue
+
+        img_url = extract_img_url_from_tag(img, category_url)
+        if not img_url:
+            continue
+
+        # 提取商品标题：优先 a 标签文本 -> a 的 title 属性 -> img 的 alt 属性 -> 同卡片内标题文本
+        title = a.get_text(" ", strip=True)
+        if len(title) <= 5:
+            title = (a.get('title') or img.get('alt') or '').strip()
+        if len(title) <= 5 and a.parent:
+            card_box = a.parent.parent if a.parent.parent else a.parent
+            if len(card_box.find_all('a')) <= 4:
+                t_cand = card_box.get_text(" ", strip=True)
+                if 5 < len(t_cand) <= 180:
+                    title = t_cand
+
+        if len(title) > 5:
+            if clean_url not in seen_urls:
+                seen_urls.add(clean_url)
+                products.append({
+                    "title": title[:120],
+                    "url": clean_url,
+                    "thumbnail": img_url,
+                    "candidate_key": f"{clean_url}###0"
+                })
+            elif img_url != dummy_image:
+                # 若同一商品第 1 个 <a> 只有占位图，第 2 个 <a> 拿到了真图，则更新真图
+                for existing_p in products:
+                    if existing_p["url"] == clean_url and existing_p["thumbnail"] == dummy_image:
+                        existing_p["thumbnail"] = img_url
+                        break
+
+        if len(products) >= 60:
+            break
+
     return products
+
+def resolve_missing_thumbnails(product_list):
+    """
+    针对着陆页使用纯 JS 懒加载（静态 HTML 中只有 svg 占位图）的商品，
+    并发请求详情页提取 og:image，确保步骤 2 所有海选商品都显示真实高清缩略图
+    """
+    def _fetch_og(item):
+        if item.get("thumbnail") and item["thumbnail"] != dummy_image and not str(item["thumbnail"]).startswith("data:image"):
+            return item
+        s = get_soup(item["url"])
+        if s:
+            og = s.find('meta', property='og:image')
+            if og and og.get('content'):
+                item["thumbnail"] = urljoin(item["url"], og['content']).split('?')[0]
+            if not item.get("title") or len(item["title"]) < 6:
+                if s.title and s.title.string:
+                    item["title"] = s.title.string.strip()
+        return item
+
+    needs_resolve = [p for p in product_list if not p.get("thumbnail") or p["thumbnail"] == dummy_image or str(p["thumbnail"]).startswith("data:image")]
+    if not needs_resolve:
+        return product_list
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        list(executor.map(_fetch_og, needs_resolve))
+    return product_list
 
 def fetch_direct_urls(url_list_text):
     urls = [u.strip() for u in url_list_text.split('\n') if u.strip().startswith('http')]
@@ -661,32 +789,59 @@ def clean_json_response(content):
     return content
 
 def ai_match_top_30(blog_text, product_list):
-    prompt = f"""You are an expert e-commerce recommender. Select and return AS MANY relevant products as possible, up to a maximum of 30. Blog Post: {blog_text[:3000]} Product Candidates: {json.dumps(product_list, ensure_ascii=False)} Output ONLY a JSON array of the selected products."""
+    """
+    修复版 AI 智能海选：
+    明确要求返回 {"products": [...]} JSON 对象，完美匹配 response_format={"type": "json_object"}，
+    并兼容字典与列表解包；若 AI 返回数量不足，自动从候选池补齐。
+    """
+    if len(product_list) <= 15:
+        return product_list
+
+    # 仅向 AI 传递精简字段，加快响应并避免 Token 超限
+    slim_candidates = [{"title": p.get("title", ""), "url": p.get("url", ""), "thumbnail": p.get("thumbnail", "")} for p in product_list]
+    prompt = f"""You are an expert e-commerce recommender. Select AS MANY relevant products as possible from the candidates (aim for 20 to 30 products) that fit the blog post topic.
+Blog Post: {blog_text[:2500]}
+Product Candidates: {json.dumps(slim_candidates, ensure_ascii=False)}
+Output ONLY a valid JSON object with the key "products" containing the array of selected product objects:
+{{"products": [{{"title": "...", "url": "...", "thumbnail": "..."}}]}}"""
     try:
-        response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"} if "json" in prompt.lower() else None, max_tokens=4000)
-        return json.loads(clean_json_response(response.choices[0].message.content))
-    except: return product_list[:30]
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            max_tokens=4000
+        )
+        parsed = json.loads(clean_json_response(response.choices[0].message.content))
+        selected = []
+        if isinstance(parsed, list):
+            selected = [x for x in parsed if isinstance(x, dict) and "url" in x]
+        elif isinstance(parsed, dict):
+            if "products" in parsed and isinstance(parsed["products"], list):
+                selected = [x for x in parsed["products"] if isinstance(x, dict) and "url" in x]
+            else:
+                for v in parsed.values():
+                    if isinstance(v, list):
+                        selected = [x for x in v if isinstance(x, dict) and "url" in x]
+                        if selected:
+                            break
+                if not selected and "url" in parsed:
+                    selected = [parsed]
 
-# ================= 精准 DOM 节点提取函数 (对应图一 div.old 与图二 span.discount-text) =================
-def is_in_excluded_container(node):
-    """过滤掉底部推荐位、最近浏览、弹窗等无关容器内的节点"""
-    bad_ancestors = ['related', 'recommend', 'upsell', 'recent', 'history', 'footer', 'header', 'nav', 'modal', 'popup']
-    p = node.parent if node else None
-    depth = 0
-    while p and depth < 8:
-        cls_str = " ".join(p.get('class', [])).lower()
-        id_str = (p.get('id') or '').lower()
-        if any(b in cls_str or b in id_str for b in bad_ancestors):
-            return True
-        p = p.parent
-        depth += 1
-    return False
+        # 如果 AI 过于严苛只选了不到 6 个商品，自动从原候选池按顺序补齐至最多 30 个
+        if len(selected) < min(6, len(product_list)):
+            seen_u = {x["url"] for x in selected}
+            for item in product_list:
+                if item["url"] not in seen_u:
+                    selected.append(item)
+                    seen_u.add(item["url"])
+                if len(selected) >= 30:
+                    break
+        return selected[:30]
+    except:
+        return product_list[:30]
 
+# ================= 精准 DOM 节点价格提取函数 (零推测保底版) =================
 def join_value_and_symbol(price_div):
-    """
-    将图一中的 <span class="value">16,00</span> 与 <span class="symbol"> €</span> 按原生 DOM 顺序无缝拼接，
-    避免 get_text('\n') 换行导致数字和货币符号分离
-    """
     if not price_div:
         return ""
     spans = price_div.find_all('span', recursive=False)
@@ -697,62 +852,36 @@ def join_value_and_symbol(price_div):
     else:
         text = price_div.get_text(separator=" ", strip=True)
     text = re.sub(r'\s+', ' ', text).strip()
-    # 美化类似 €30,60 为 € 30,60
     if text.startswith('€') and not text.startswith('€ '):
         text = '€ ' + text[1:]
     return text
 
 def extract_exact_dom_pricing(soup):
-    """
-    直接匹配 Callie 页面 DOM 结构：
-    1. 现价: div.now.now-price / div.now-price
-    2. 划线价: div.old (内含 span.value 与 span.symbol)
-    3. 折扣信息: span.discount-text / .product-detail-trace-15 (位于 div.sale-item__price 内)
-    """
+    """直接提取页面第 1 组主商品的 div.now-price, div.old, span.discount-text"""
     dom_sale_price = ""
     dom_old_price = ""
     dom_discount_text = ""
 
-    # 1. 匹配现价节点 div.now-price 并查找同级的 div.old
-    now_nodes = soup.select('div.now.now-price, div.now-price')
-    for now_node in now_nodes:
-        if is_in_excluded_container(now_node):
-            continue
+    now_node = soup.select_one('div.now.now-price, div.now-price')
+    if now_node:
         candidate_sale = join_value_and_symbol(now_node)
         if parse_price_to_float(candidate_sale) > 0:
             dom_sale_price = candidate_sale
-            # 优先在同一个价格父容器内查找紧邻的 <div class="old">
             if now_node.parent:
                 sibling_old = now_node.parent.select_one('div.old')
                 if sibling_old:
-                    candidate_old = join_value_and_symbol(sibling_old)
-                    if parse_price_to_float(candidate_old) > parse_price_to_float(dom_sale_price):
-                        dom_old_price = candidate_old
-            break
+                    dom_old_price = join_value_and_symbol(sibling_old)
 
-    # 2. 若同级未找到，单独扫描主商品区的 div.old
     if not dom_old_price:
-        for old_node in soup.select('div.old'):
-            if is_in_excluded_container(old_node):
-                continue
-            val_span = old_node.select_one('span.value')
-            sym_span = old_node.select_one('span.symbol')
-            if val_span or sym_span:
-                candidate_old = join_value_and_symbol(old_node)
-                if parse_price_to_float(candidate_old) > 0:
-                    if not dom_sale_price or parse_price_to_float(candidate_old) > parse_price_to_float(dom_sale_price):
-                        dom_old_price = candidate_old
-                        break
+        old_node = soup.select_one('div.old')
+        if old_node:
+            dom_old_price = join_value_and_symbol(old_node)
 
-    # 3. 匹配图二中的折扣文案节点 span.discount-text / .product-detail-trace-15
-    disc_nodes = soup.select('span.discount-text, .product-detail-trace-15, div.sale-item__price span')
-    for d_node in disc_nodes:
-        if is_in_excluded_container(d_node):
-            continue
-        d_txt = re.sub(r'\s+', ' ', d_node.get_text(strip=True)).strip()
+    disc_node = soup.select_one('span.discount-text, .product-detail-trace-15, div.sale-item__price span')
+    if disc_node:
+        d_txt = re.sub(r'\s+', ' ', disc_node.get_text(strip=True)).strip()
         if d_txt and '%' in d_txt and len(d_txt) <= 35:
             dom_discount_text = d_txt
-            break
 
     return {
         "dom_sale_price": dom_sale_price,
@@ -761,28 +890,11 @@ def extract_exact_dom_pricing(soup):
     }
 
 def extract_authoritative_anchor_price(soup):
-    """从 <meta property="product:price:amount"> 或 JSON-LD 提取权威实付价数值兜底"""
     og_price = soup.find('meta', property='product:price:amount') or soup.find('meta', property='og:price:amount')
     if og_price and og_price.get('content'):
         v = parse_price_to_float(og_price.get('content'))
         if v > 0:
             return v
-
-    for sc in soup.find_all('script', type='application/ld+json'):
-        try:
-            data = json.loads(sc.string or sc.get_text() or "{}")
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                if isinstance(item, dict):
-                    offers = item.get('offers')
-                    if isinstance(offers, dict) and offers.get('price'):
-                        v = parse_price_to_float(offers.get('price'))
-                        if v > 0: return v
-                    elif isinstance(offers, list) and len(offers) > 0 and isinstance(offers[0], dict):
-                        v = parse_price_to_float(offers[0].get('price'))
-                        if v > 0: return v
-        except:
-            continue
     return 0.0
 
 def extract_product_details(product_url, preselected_image=None):
@@ -805,11 +917,9 @@ def extract_product_details(product_url, preselected_image=None):
     og_desc_tag = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'description'})
     page_desc = og_desc_tag.get('content', '').strip() if og_desc_tag and og_desc_tag.get('content') else ""
 
-    # 第 1 步：直接通过 CSS 选择器匹配 div.now-price, div.old, span.discount-text
     dom_pricing = extract_exact_dom_pricing(soup)
     anchor_val = extract_authoritative_anchor_price(soup)
 
-    # 清理无关标签后提取 <h1> 之后的文本供 AI 总结标题与规格
     for tag in soup.find_all(['script', 'style', 'svg', 'noscript', 'head', 'header', 'nav', 'footer']):
         tag.decompose()
     h1_tag = soup.find('h1')
@@ -835,14 +945,14 @@ def extract_product_details(product_url, preselected_image=None):
     hint_block = "\n".join(hints)
     
     prompt = f"""Analyze the following product page text. DO NOT TRANSLATE. Extract into JSON: 
-    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text (e.g. If Dutch/French/German, output Dutch/French/German). DO NOT translate to English.
-    2. "price": The current selling product price with currency symbol (e.g., "€ 30,60" or "16,00 €").
-    3. "original_price": The crossed-out original price from div.old if present (e.g., "€ 34,00" or "16,00 €"). If none, output "".
-    4. "discount_text": The discount badge text from span.discount-text if present (e.g., "10% Korting" or "20% Réduction"). If none, output "".
+    1. "title": Summarize the product name into a concise title. Keep it VERY SHORT (Max 35-40 chars). CRITICAL RULE: MUST be in the EXACT SAME LANGUAGE as the source text. DO NOT translate to English.
+    2. "price": The current selling product price with currency symbol.
+    3. "original_price": The crossed-out original price if present, otherwise "".
+    4. "discount_text": The discount badge text if present, otherwise "".
     5. "return_days"
-    6. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization, Package) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
-    7. "cta_text": Short action-oriented CTA button text (e.g., "In winkelwagen" / "Ajouter au panier") in the ORIGINAL LANGUAGE.
-    RULES: NEVER extract shipping fees (e.g., € 4,00 / € 9,00) or option add-on prices (like +€ 2,70).
+    6. "specs": Extract 2-3 key specifications (e.g., Material, Craftsmanship, Customization) as a JSON Key-Value object. CRITICAL RULE: DO NOT include any size, dimensions, length, width, height, or weight information! Keep keys and values in the ORIGINAL LANGUAGE.
+    7. "cta_text": Short action-oriented CTA button text in the ORIGINAL LANGUAGE.
+    RULES: NEVER extract shipping fees or option add-on prices.
     {hint_block}
     Page Text:
     {focused_text}"""
@@ -851,10 +961,10 @@ def extract_product_details(product_url, preselected_image=None):
         response = client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"}, max_tokens=1500)
         result = json.loads(clean_json_response(response.choices[0].message.content))
 
-        # --- 第 2 步：若 DOM 选择器（div.now-price / div.old / span.discount-text）已直接命中，100% 优先采用 DOM 提取结果 ---
+        # 零推测原则：优先采用 DOM 真实提取值，绝不通过算术反推编造价格
         final_price = dom_pricing["dom_sale_price"] or str(result.get("price") or "").strip()
-        final_orig = dom_pricing["dom_old_price"] or str(result.get("original_price") or "").strip()
-        final_disc = dom_pricing["dom_discount_text"] or str(result.get("discount_text") or "").strip()
+        final_orig = dom_pricing["dom_old_price"]
+        final_disc = dom_pricing["dom_discount_text"]
 
         p_float = parse_price_to_float(final_price)
         if not dom_pricing["dom_sale_price"] and anchor_val > 0 and abs(p_float - anchor_val) > 0.1:
@@ -862,11 +972,8 @@ def extract_product_details(product_url, preselected_image=None):
             p_float = anchor_val
 
         o_float = parse_price_to_float(final_orig)
-        if o_float <= p_float or o_float > p_float * 3.0:
+        if o_float <= p_float:
             final_orig = ""
-
-        if not final_orig and not dom_pricing["dom_discount_text"]:
-            final_disc = ""
 
         result["price"] = final_price
         result["original_price"] = final_orig
@@ -884,7 +991,6 @@ def format_price_for_schema(price_str):
     return f"{val:.2f}" if val > 0 else "0.00"
 
 def detect_currency_and_country(buy_link, price_str="", page_currency=""):
-    """根据域名、价格符号和网页 Meta 自动匹配准确的 ISO 货币代码与国家代码"""
     url_lower = str(buy_link).lower()
     p_str = str(price_str).lower()
     
@@ -922,7 +1028,6 @@ def detect_currency_and_country(buy_link, price_str="", page_currency=""):
     return detected_curr, detected_country
 
 def build_product_schema_dict(title, image_url, price, buy_link, return_days=30, description="", page_currency="", include_context=True):
-    """构建符合 Google Merchant Listing 规范的完整 Product 结构化数据字典"""
     price_num = format_price_for_schema(price)
     currency, country_code = detect_currency_and_country(buy_link, price, page_currency)
     
@@ -1139,15 +1244,20 @@ with tab1:
     if st.button("🔍 抓取并智能海选", type="primary"):
         if not blog_url or not shop_url: st.warning("请填写完整的两个链接！")
         else:
-            with st.spinner("正在抓取及分析..."):
+            with st.spinner("正在抓取候选商品池与分析博客语义..."):
                 blog_text = fetch_blog_context(blog_url)
                 pool = fetch_product_list(shop_url)
-                if pool:
+                if not pool:
+                    st.error("❌ 未能从该着陆页抓取到有效商品链接，请检查链接是否可访问。")
+                else:
                     raw_top_30 = ai_match_top_30(blog_text, pool)
-                    st.session_state.matched_products = [item for item in (raw_top_30 if isinstance(raw_top_30, list) else []) if isinstance(item, dict) and "url" in item]
-                    for p in st.session_state.matched_products: 
+                    matched_list = [item for item in (raw_top_30 if isinstance(raw_top_30, list) else []) if isinstance(item, dict) and "url" in item]
+                    # 并发补全可能因懒加载缺失的高清缩略图
+                    matched_list = resolve_missing_thumbnails(matched_list)
+                    for idx, p in enumerate(matched_list):
                         p.setdefault("thumbnail", dummy_image)
-                        p.setdefault("candidate_key", f"{p['url']}###0")
+                        p["candidate_key"] = f"{p['url']}###{idx}"
+                    st.session_state.matched_products = matched_list
                     if st.session_state.matched_products:
                         st.session_state.step = 2
                         st.rerun()
@@ -1164,7 +1274,7 @@ with tab2:
                     st.rerun()
 
 if st.session_state.step >= 2 and st.session_state.matched_products:
-    st.markdown("### 步骤 2：人工确认生成名单")
+    st.markdown(f"### 步骤 2：人工确认生成名单 (共筛选出 {len(st.session_state.matched_products)} 个候选)")
     with st.form("selection_form"):
         temp_selected_keys = []
         cols_per_row = 8
